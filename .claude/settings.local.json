@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Robinson\\\\Desktop\\\\holos-perf\" -Depth 2 | Where-Object { -not $_.Name.StartsWith\\('.'\\) -and $_.Name -ne 'node_modules' } | ForEach-Object { if \\($_.PSIsContainer\\) { \"[DIR] \" + $_.FullName.Replace\\('C:\\\\Users\\\\Robinson\\\\Desktop\\\\holos-perf\\\\', ''\\) } else { \"[FILE] \" + $_.FullName.Replace\\('C:\\\\Users\\\\Robinson\\\\Desktop\\\\holos-perf\\\\', ''\\) } })"
+    ]
+  }
+}
