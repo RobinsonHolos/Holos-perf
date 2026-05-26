@@ -50,7 +50,7 @@ export default function Onboarding() {
           <img
             src="/logo.png"
             alt="Logo Holos Performance"
-            className="w-20 h-20 object-contain mx-auto mb-2"
+            className="block w-20 h-20 object-contain mx-auto mb-2"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
           <div className="flex justify-center mb-3">

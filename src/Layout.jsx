@@ -141,7 +141,7 @@ export default function Layout({ children, currentPageName }) {
             src="/logo.png"
             onError={(e) => { e.target.style.display = 'none'; }}
             alt="Logo"
-            className="w-14 h-14 object-contain"
+            className="block w-14 h-14 object-contain"
           />
         </Link>
         <button
@@ -159,7 +159,7 @@ export default function Layout({ children, currentPageName }) {
             src="/logo.png"
             onError={(e) => { e.target.style.display = 'none'; }}
             alt="Logo"
-            className="w-32 h-32 object-contain drop-shadow-md hover:scale-105 transition-transform"
+            className="block w-32 h-32 object-contain drop-shadow-md hover:scale-105 transition-transform"
           />
         </Link>
       </div>

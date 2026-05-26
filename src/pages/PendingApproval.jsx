@@ -11,7 +11,7 @@ export default function PendingApproval() {
           <img
             src="/logo.png"
             alt="Logo"
-            className="w-20 h-20 object-contain mx-auto mb-2"
+            className="block w-20 h-20 object-contain mx-auto mb-2"
           />
           <div className="flex justify-center mb-3">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
