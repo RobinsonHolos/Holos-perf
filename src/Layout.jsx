@@ -138,7 +138,7 @@ export default function Layout({ children, currentPageName }) {
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-1 bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-100 md:hidden">
         <Link to={logoLink}>
           <img
-            src="https://media.base44.com/images/public/69737cc1c197a5ce85c72b3d/143645da7_logoHOLOS2PNG.png"
+            src="/logo.png"
             onError={(e) => { e.target.style.display = 'none'; }}
             alt="Logo"
             className="w-14 h-14 object-contain"
@@ -156,7 +156,7 @@ export default function Layout({ children, currentPageName }) {
       <div className="hidden md:block fixed top-3 left-3 z-50">
         <Link to={logoLink}>
           <img
-            src="https://media.base44.com/images/public/69737cc1c197a5ce85c72b3d/143645da7_logoHOLOS2PNG.png"
+            src="/logo.png"
             onError={(e) => { e.target.style.display = 'none'; }}
             alt="Logo"
             className="w-32 h-32 object-contain drop-shadow-md hover:scale-105 transition-transform"

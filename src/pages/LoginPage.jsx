@@ -74,7 +74,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <img
-            src="https://media.base44.com/images/public/69737cc1c197a5ce85c72b3d/143645da7_logoHOLOS2PNG.png"
+            src="/logo.png"
             alt="Logo Holos Performance"
             className="w-20 h-20 object-contain mx-auto mb-2"
             onError={(e) => { e.target.style.display = 'none'; }}

@@ -9,7 +9,7 @@ export default function PendingApproval() {
       <Card className="w-full max-w-md shadow-lg text-center">
         <CardHeader>
           <img
-            src="https://media.base44.com/images/public/69737cc1c197a5ce85c72b3d/143645da7_logoHOLOS2PNG.png"
+            src="/logo.png"
             alt="Logo"
             className="w-20 h-20 object-contain mx-auto mb-2"
           />
