@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Safe area insets for mobile PWA (viewport-fit=cover) */
+@media (max-width: 767px) {
+  .mobile-header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .main-below-header {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4rem);
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

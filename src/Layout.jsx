@@ -135,7 +135,7 @@ export default function Layout({ children, currentPageName }) {
   return (
     <div id="layout-bg" className="min-h-screen" style={{ background: 'transparent' }}>
       {/* Header mobile */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-1 bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-100 md:hidden">
+      <div className="mobile-header fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pb-1 bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-100 md:hidden">
         <Link to={logoLink}>
           <img
             src="/logo.png"
@@ -173,7 +173,7 @@ export default function Layout({ children, currentPageName }) {
           onMobileClose={() => setSideNavOpen(false)}
           user={user}
         />
-        <main className="flex-1 min-w-0 relative z-30 pt-16 md:pt-0">
+        <main className="flex-1 min-w-0 relative z-30 main-below-header md:pt-0">
           {children}
         </main>
       </div>
