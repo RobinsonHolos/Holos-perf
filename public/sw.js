@@ -1,5 +1,5 @@
-const CACHE_NAME = 'holos-v3';
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
+const CACHE_NAME = 'holos-v4';
+const STATIC_ASSETS = ['/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -22,7 +22,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Ne pas mettre en cache les assets JS/CSS (hashes changeants à chaque build)
+  // index.html : toujours depuis le réseau pour éviter la page blanche après déploiement
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Assets JS/CSS hachés : toujours depuis le réseau
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(fetch(event.request));
     return;
