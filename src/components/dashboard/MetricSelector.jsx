@@ -1,6 +1,8 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { cn } from "@/lib/utils";
 import { Pencil } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import ColorPicker from '@/components/ui/ColorPicker';
 
 export default function MetricSelector({ selected, onChange, metrics, onColorChange }) {
   const defaultMetrics = [
@@ -40,59 +42,49 @@ export default function MetricSelector({ selected, onChange, metrics, onColorCha
 }
 
 function MetricButton({ metric, isSelected, onToggle, onColorChange }) {
-  const colorInputRef = useRef(null);
-
-  const handleColorClick = (e) => {
-    e.stopPropagation();
-    colorInputRef.current?.click();
-  };
-
-  const handleColorChange = (e) => {
-    e.stopPropagation();
-    if (onColorChange) {
-      onColorChange(metric.key, e.target.value);
-    }
-  };
-
   return (
     <button
       onClick={onToggle}
       className={cn(
         "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border-2 shadow-sm",
         isSelected
-          ? "text-white border-transparent shadow-md"
+          ? "text-white border-white shadow-md"
           : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
       )}
-      style={isSelected ? { backgroundColor: metric.color, borderColor: metric.color } : {}}
+      style={isSelected ? { backgroundColor: metric.color } : {}}
     >
-      {/* Rond coloré avec crayon au survol */}
-      <span className="relative group/dot flex items-center justify-center">
-        <span
-          className="w-3 h-3 rounded-full block transition-opacity group-hover/dot:opacity-0"
-          style={{ backgroundColor: metric.color }}
-        />
-        {/* Crayon visible au survol */}
-        <span
-          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/dot:opacity-100 cursor-pointer transition-opacity"
-          onClick={handleColorClick}
-          title="Changer la couleur"
-        >
-          <Pencil
-            className="w-3 h-3"
-            style={{ color: isSelected ? 'white' : metric.color }}
-          />
-        </span>
-        {/* Input color caché */}
-        <input
-          ref={colorInputRef}
-          type="color"
-          value={metric.color}
-          onChange={handleColorChange}
+      <Popover>
+        <PopoverTrigger asChild>
+          <span
+            className="relative group/dot flex items-center justify-center w-3 h-3 rounded-full flex-shrink-0 ring-[1.5px] ring-white"
+            onClick={(e) => e.stopPropagation()}
+            title="Changer la couleur"
+          >
+            <span
+              className="w-3 h-3 rounded-full block transition-opacity group-hover/dot:opacity-0"
+              style={{ backgroundColor: metric.color }}
+            />
+            <span
+              className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/dot:opacity-100 cursor-pointer transition-opacity"
+            >
+              <Pencil
+                className="w-2.5 h-2.5"
+                style={{ color: isSelected ? 'white' : metric.color }}
+              />
+            </span>
+          </span>
+        </PopoverTrigger>
+        <PopoverContent
+          className="p-3 w-auto"
           onClick={(e) => e.stopPropagation()}
-          className="absolute opacity-0 w-0 h-0 pointer-events-none"
-          tabIndex={-1}
-        />
-      </span>
+        >
+          <p className="text-xs font-semibold text-slate-600 mb-2">{metric.label}</p>
+          <ColorPicker
+            value={metric.color}
+            onChange={(newColor) => onColorChange && onColorChange(metric.key, newColor)}
+          />
+        </PopoverContent>
+      </Popover>
       {metric.label}
     </button>
   );

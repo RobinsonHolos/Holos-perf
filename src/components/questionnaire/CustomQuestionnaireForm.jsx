@@ -9,9 +9,24 @@ import { CheckCircle, Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-const isQuestionVisible = (q, currentResponses) => {
+const resolveSelectionLabels = (answer, sourceQuestion) => {
+  if (!Array.isArray(answer)) return answer;
+  const choices = sourceQuestion?.selectOptions?.choices || [];
+  return answer.map(val => {
+    const i = parseInt(val, 10);
+    if (!isNaN(i) && choices[i] !== undefined) return choices[i].label || val;
+    return val; // compatibilité avec l'ancienne valeur texte
+  });
+};
+
+const isQuestionVisible = (q, currentResponses, allQuestions = []) => {
   if (!q.condition) return true;
-  const conditionMet = currentResponses[q.condition.questionId] === q.condition.expectedValue;
+  const answer = currentResponses[q.condition.questionId];
+  const sourceQuestion = allQuestions.find(sq => sq.id === q.condition.questionId);
+  const resolved = resolveSelectionLabels(answer, sourceQuestion);
+  const conditionMet = Array.isArray(resolved)
+    ? resolved.includes(q.condition.expectedValue)
+    : resolved === q.condition.expectedValue;
   const conditionType = q.condition.type || 'show';
   if (conditionType === 'show' && !conditionMet) return false;
   if (conditionType === 'hide' && conditionMet) return false;
@@ -62,9 +77,10 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
     }
 
     // Construire les réponses finales en excluant les questions cachées par leurs conditions
+    const allQuestions = currentTemplate.questions;
     const finalResponses = { ...responses };
     currentTemplate.questions.forEach(q => {
-      if (!isQuestionVisible(q, responses)) {
+      if (!isQuestionVisible(q, responses, allQuestions)) {
         delete finalResponses[q.id];
         return;
       }
@@ -81,9 +97,10 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
 
     // Vérifier les champs obligatoires uniquement sur les questions visibles
     const missingRequired = currentTemplate.questions.filter(q => {
-      if (!isQuestionVisible(q, responses)) return false;
+      if (!isQuestionVisible(q, responses, allQuestions)) return false;
       if (!q.required) return false;
       const val = finalResponses[q.id];
+      if (Array.isArray(val)) return val.length === 0;
       return val === undefined || val === null || val === '';
     });
 
@@ -182,7 +199,7 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
       <CardContent className="p-6 md:p-8">
         <form onSubmit={handleSubmit} className="space-y-8">
           {currentTemplate.questions.map((q, index) => {
-            if (!isQuestionVisible(q, responses)) return null;
+            if (!isQuestionVisible(q, responses, currentTemplate.questions)) return null;
             
             return (
             <motion.div 
@@ -280,30 +297,43 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
 
               {q.type === 'select' && q.selectOptions?.choices && (
                 <div className="ml-0 sm:ml-9">
+                  <p className="text-xs text-slate-400 mb-2">Plusieurs choix possibles</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {q.selectOptions.choices.map((choice, choiceIndex) => {
                       const isBlack = choice.color?.toLowerCase() === '#000000' || choice.color?.toLowerCase() === '#000' || choice.color?.toLowerCase() === 'black';
-                      const isWhite = choice.color?.toLowerCase() === '#ffffff' || choice.color?.toLowerCase() === '#fff' || choice.color?.toLowerCase() === 'white' || !choice.color;
                       const textColor = isBlack ? '#ffffff' : '#000000';
                       const displayLabel = choice.label || `Choix ${choiceIndex + 1}`;
-                      const isSelected = responses[q.id] === displayLabel;
-                      
+                      const choiceKey = String(choiceIndex);
+                      const currentSelection = Array.isArray(responses[q.id]) ? responses[q.id] : (responses[q.id] ? [responses[q.id]] : []);
+                      const isSelected = currentSelection.includes(choiceKey);
+
+                      const toggle = () => {
+                        setResponses(prev => {
+                          const prevSel = Array.isArray(prev[q.id]) ? prev[q.id] : (prev[q.id] ? [prev[q.id]] : []);
+                          const already = prevSel.includes(choiceKey);
+                          const next = already
+                            ? prevSel.filter(v => v !== choiceKey)
+                            : [...prevSel, choiceKey];
+                          return { ...prev, [q.id]: next };
+                        });
+                      };
+
                       return (
                         <button
                           key={choiceIndex}
                           type="button"
-                          onClick={() => setResponses({ ...responses, [q.id]: displayLabel })}
+                          onClick={toggle}
                           className="flex items-center gap-3 p-3 border-2 rounded-lg transition-all hover:scale-105"
                           style={{
                             backgroundColor: choice.color || '#ffffff',
-                            borderColor: '#000000',
+                            borderColor: isSelected ? '#000000' : '#e2e8f0',
                             boxShadow: isSelected ? '0 0 0 3px rgba(0,0,0,0.35)' : 'none'
                           }}
                         >
                           {choice.image && (
                             <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-white">
-                              <img 
-                                src={choice.image} 
+                              <img
+                                src={choice.image}
                                 alt={displayLabel}
                                 className="w-full h-full object-cover"
                                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -313,6 +343,14 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
                           <div className="flex-1 text-left font-medium" style={{ color: textColor }}>
                             {displayLabel}
                           </div>
+                          {isSelected && (
+                            <div
+                              className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                              style={{ backgroundColor: isBlack ? '#ffffff' : '#000000', color: isBlack ? '#000000' : '#ffffff' }}
+                            >
+                              ✓
+                            </div>
+                          )}
                         </button>
                       );
                     })}

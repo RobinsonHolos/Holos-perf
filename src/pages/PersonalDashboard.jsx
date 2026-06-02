@@ -122,26 +122,8 @@ export default function PersonalDashboard() {
 
       numericQuestions.forEach((question, index) => {
         const key = question.id;
-        const label = (question.athleteLabel || question.label || '').toLowerCase();
         labels[key] = question.athleteLabel || question.label;
-        
-        let color = question.scaleOptions?.color;
-        if (!color || color === '#ffffff' || color === '#000000') {
-          if (label.includes('fatigue')) color = '#ef4444';
-          else if (label.includes('intensit')) color = '#f59e0b';
-          else if (label.includes('sommeil')) color = '#8b5cf6';
-          else if (label.includes('plaisir')) color = '#10b981';
-          else if (label.includes('harmonie') || label.includes('proches')) color = '#06b6d4';
-          else if (label.includes('technique')) color = '#3b82f6';
-          else if (label.includes('tactique')) color = '#6366f1';
-          else if (label.includes('épanouissement') || label.includes('epanouissement')) color = '#ec4899';
-          else if (label.includes('dynamisme')) color = '#84cc16';
-          else if (label.includes('estime')) color = '#a855f7';
-          else if (label.includes('cardiovasculaire')) color = '#f43f5e';
-          else if (label.includes('musculaire')) color = '#fb923c';
-          else color = defaultColors[index % defaultColors.length];
-        }
-        colors[key] = color;
+        colors[key] = defaultColors[index % defaultColors.length];
         metricKeys.push(key);
       });
 
@@ -193,7 +175,8 @@ export default function PersonalDashboard() {
     
     // session_type = valeur de la première question (type de séance)
     const firstQuestionId = assignedQuestionnaires.find(q => q.id === response.template_id)?.questions?.[0]?.id;
-    const sessionType = firstQuestionId ? response.responses?.[firstQuestionId] : null;
+    const rawSessionType = firstQuestionId ? response.responses?.[firstQuestionId] : null;
+    const sessionType = Array.isArray(rawSessionType) ? rawSessionType[0] : rawSessionType;
 
     return {
       id: response.id,
@@ -377,6 +360,7 @@ export default function PersonalDashboard() {
                   <MetricSelector
                     selected={selectedMetrics}
                     onChange={setSelectedMetrics}
+                    onColorChange={(key, newColor) => setMetricColors(prev => ({ ...prev, [key]: newColor }))}
                     metrics={Object.keys(metricLabels).map(key => ({
                       key,
                       label: metricLabels[key],
