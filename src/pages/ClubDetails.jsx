@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Upload, Link as LinkIcon, Copy, Check, Trash2, UserPlus, X, ClipboardList, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import ClubTeamsSection from '@/components/ClubTeamsSection';
+import ColorPicker from '@/components/ui/ColorPicker';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Link, useNavigate } from 'react-router-dom';
@@ -53,6 +54,8 @@ export default function ClubDetails() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copiedToken, setCopiedToken] = useState(null);
+  const [showPrimaryPicker, setShowPrimaryPicker] = useState(false);
+  const [showSecondaryPicker, setShowSecondaryPicker] = useState(false);
 
   const { data: club, isLoading } = useQuery({
     queryKey: ['club', clubId],
@@ -326,26 +329,45 @@ export default function ClubDetails() {
 
                 {/* Couleurs */}
                 <div className="space-y-3">
-                  <Label>Couleur principale</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={form.primary_color}
-                      onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))}
-                      className="w-10 h-10 rounded cursor-pointer border border-slate-200"
-                    />
-                    <Input value={form.primary_color} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))} className="font-mono text-sm" />
+                  <div className="space-y-2">
+                    <Label>Couleur principale</Label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowPrimaryPicker(v => !v); setShowSecondaryPicker(false); }}
+                      className="flex items-center gap-3 w-full px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                    >
+                      <div className="w-6 h-6 rounded border border-slate-200 flex-shrink-0" style={{ backgroundColor: form.primary_color }} />
+                      <span className="font-mono text-slate-600">{form.primary_color}</span>
+                      <span className="ml-auto text-slate-400">{showPrimaryPicker ? '▲' : '▼'}</span>
+                    </button>
+                    {showPrimaryPicker && (
+                      <div className="pt-1">
+                        <ColorPicker
+                          value={form.primary_color}
+                          onChange={v => setForm(f => ({ ...f, primary_color: v }))}
+                        />
+                      </div>
+                    )}
                   </div>
-
-                  <Label>Couleur secondaire</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={form.secondary_color}
-                      onChange={e => setForm(f => ({ ...f, secondary_color: e.target.value }))}
-                      className="w-10 h-10 rounded cursor-pointer border border-slate-200"
-                    />
-                    <Input value={form.secondary_color} onChange={e => setForm(f => ({ ...f, secondary_color: e.target.value }))} className="font-mono text-sm" />
+                  <div className="space-y-2">
+                    <Label>Couleur secondaire</Label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowSecondaryPicker(v => !v); setShowPrimaryPicker(false); }}
+                      className="flex items-center gap-3 w-full px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                    >
+                      <div className="w-6 h-6 rounded border border-slate-200 flex-shrink-0" style={{ backgroundColor: form.secondary_color }} />
+                      <span className="font-mono text-slate-600">{form.secondary_color}</span>
+                      <span className="ml-auto text-slate-400">{showSecondaryPicker ? '▲' : '▼'}</span>
+                    </button>
+                    {showSecondaryPicker && (
+                      <div className="pt-1">
+                        <ColorPicker
+                          value={form.secondary_color}
+                          onChange={v => setForm(f => ({ ...f, secondary_color: v }))}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 

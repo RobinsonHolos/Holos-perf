@@ -197,6 +197,50 @@ export default function ClubTeamsSection({ club, athletes, templates, currentUse
     return true;
   });
 
+  const isAdmin = currentUser?.user_status === 'admin';
+
+  const removeAthleteMutation = useMutation({
+    mutationFn: async (athleteEmail) => {
+      // Retirer de l'équipe et des questionnaires de l'équipe
+      for (const team of teams) {
+        if ((team.athlete_emails || []).includes(athleteEmail)) {
+          for (const qId of (team.questionnaire_template_ids || [])) {
+            const tmpl = templates.find(t => t.id === qId);
+            if (tmpl) {
+              await base44.entities.QuestionnaireTemplate.update(qId, {
+                assigned_athletes: (tmpl.assigned_athletes || []).filter(e => e !== athleteEmail)
+              });
+            }
+          }
+          await base44.entities.Team.update(team.id, {
+            athlete_emails: (team.athlete_emails || []).filter(e => e !== athleteEmail)
+          });
+        }
+      }
+      // Retirer des questionnaires de l'équipe principale
+      for (const qId of (club.default_questionnaire_template_ids || [])) {
+        const tmpl = templates.find(t => t.id === qId);
+        if (tmpl) {
+          await base44.entities.QuestionnaireTemplate.update(qId, {
+            assigned_athletes: (tmpl.assigned_athletes || []).filter(e => e !== athleteEmail)
+          });
+        }
+      }
+      // Retirer du club
+      await base44.entities.Club.update(club.id, {
+        athlete_emails: (club.athlete_emails || []).filter(e => e !== athleteEmail)
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams', club.id] });
+      qc.invalidateQueries({ queryKey: ['club', club.id] });
+      qc.invalidateQueries({ queryKey: ['clubs'] });
+      qc.invalidateQueries({ queryKey: ['all-users-club'] });
+      toast.success('Athlète retiré du club');
+    },
+    onError: (err) => toast.error('Erreur : ' + err.message),
+  });
+
   const getAthleteTeam = (athleteEmail) => teams.find(t => (t.athlete_emails || []).includes(athleteEmail)) || null;
 
   const mainQIds = club.default_questionnaire_template_ids || [];
@@ -308,6 +352,10 @@ export default function ClubTeamsSection({ club, athletes, templates, currentUse
                     base44.entities.Team.update(team.id, { coach_emails: coachEmails })
                       .then(() => qc.invalidateQueries({ queryKey: ['teams', club.id] }))
                   }
+                  isAdmin={isAdmin}
+                  onRemoveAthlete={(athleteEmail) => {
+                    if (confirm('Retirer cet athlète du club ?')) removeAthleteMutation.mutate(athleteEmail);
+                  }}
                 />
               ))}
             </div>
@@ -322,7 +370,7 @@ export default function ClubTeamsSection({ club, athletes, templates, currentUse
   );
 }
 
-function TeamColumn({ col, coaches, teams, activeTemplates, isDragging, mainQIds, canEditName, onToggleMainQuestionnaire, editingTeamId, editingTeamName, editingMainTeamName, mainTeamNameValue, onMainTeamNameChange, onSaveMainTeamName, onStartEditMainName, onCancelEditMainName, onStartEdit, onEditNameChange, onSaveRename, onCancelEdit, onDelete, onToggleQuestionnaire, onUpdateCoaches }) {
+function TeamColumn({ col, coaches, teams, activeTemplates, isDragging, mainQIds, canEditName, onToggleMainQuestionnaire, editingTeamId, editingTeamName, editingMainTeamName, mainTeamNameValue, onMainTeamNameChange, onSaveMainTeamName, onStartEditMainName, onCancelEditMainName, onStartEdit, onEditNameChange, onSaveRename, onCancelEdit, onDelete, onToggleQuestionnaire, onUpdateCoaches, isAdmin, onRemoveAthlete }) {
   const [showQuestionnaires, setShowQuestionnaires] = useState(false);
   const { colId, name, isMain, team, athletes } = col;
   const isEditingName = isMain ? editingMainTeamName : editingTeamId === team?.id;
@@ -457,6 +505,15 @@ function TeamColumn({ col, coaches, teams, activeTemplates, isDragging, mainQIds
                         <p className="text-xs font-medium text-slate-700 truncate">{athlete.full_name || athlete.email}</p>
                         <p className="text-xs text-slate-400 truncate">{athlete.email}</p>
                       </div>
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRemoveAthlete(athlete.email); }}
+                          className="text-slate-300 hover:text-red-500 transition flex-shrink-0"
+                          title="Retirer du club"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   );
                   if (dragSnapshot.isDragging) {
