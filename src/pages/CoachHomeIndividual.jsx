@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { supabase as base44 } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Activity, 
+import { Button } from "@/components/ui/button";
+import {
+  Activity,
   MessageCircle,
   BarChart3,
   Users,
   ClipboardList,
   Calendar,
   CalendarDays,
-  User
+  User,
+  PenLine,
+  BarChart2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import CoachCalendar from '../components/calendar/CoachCalendar';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 function getBrandColor() {
   return document.documentElement.style.getPropertyValue('--brand-color') || null;
@@ -27,6 +32,7 @@ function getBrandSecondaryColor() {
 
 export default function CoachHomeIndividual() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [group, setGroup] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [brandColor, setBrandColor] = useState(null);
@@ -135,6 +141,50 @@ export default function CoachHomeIndividual() {
           </p>
         </div>
 
+        {/* Questionnaire du jour */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-500" />
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-800">Questionnaire du jour</h3>
+                    <p className="text-sm text-slate-500 capitalize">
+                      {format(new Date(), 'EEEE d MMMM', { locale: fr })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    onClick={() => navigate('/CoachDailyQuestionnaire')}
+                    className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    <PenLine className="w-4 h-4" />
+                    Répondre au questionnaire
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/CoachDailyResponses')}
+                    className="gap-2"
+                  >
+                    <BarChart2 className="w-4 h-4" />
+                    Voir les réponses
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* Menu Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-12">
           {menuItems.map((item, index) => {
@@ -177,7 +227,7 @@ export default function CoachHomeIndividual() {
         </div>
 
         {/* Calendrier */}
-        <div className="mt-12">
+        <div className="mt-4">
           <CoachCalendar
             coachEmail={user.email}
             athletes={(group?.athlete_emails || []).map(email => {

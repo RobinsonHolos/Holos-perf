@@ -156,6 +156,14 @@ export default function QuestionForm({
         {newQuestion.type === 'select' && (
           <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-4">
             <h4 className="font-medium text-slate-800 text-sm">Choix multiples</h4>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="multi-select"
+                checked={newQuestion.selectOptions?.multiSelect ?? false}
+                onCheckedChange={(checked) => setNewQuestion({ ...newQuestion, selectOptions: { ...newQuestion.selectOptions, multiSelect: checked } })}
+              />
+              <Label htmlFor="multi-select" className="text-sm cursor-pointer">Permettre plusieurs réponses</Label>
+            </div>
             {(newQuestion.selectOptions?.choices || []).map((choice, ci) => (
               <div key={ci} className="p-3 bg-white border rounded-lg space-y-2">
                 <div className="flex justify-between items-center">

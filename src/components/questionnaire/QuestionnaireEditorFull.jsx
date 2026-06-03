@@ -152,19 +152,31 @@ export default function QuestionnaireEditorFull({ user, template, onSave, onCanc
   const qc = useQueryClient();
   const { data: questionBankItems = [] } = useQuery({
     queryKey: ['question-bank-items'],
-    queryFn: () => base44.entities.QuestionBankItem.list('-created_date', 200),
+    queryFn: () => base44.entities.QuestionBankItem.list('-created_at', 200),
     enabled: canCreateQuestionnaire,
   });
 
   const addToBankMutation = useMutation({
-    mutationFn: (question) => base44.entities.QuestionBankItem.create({
-      label: question.label, athleteLabel: question.athleteLabel || '',
-      description: question.description || '', type: question.type,
-      required: question.required || false,
-      selectOptions: question.selectOptions, scaleOptions: question.scaleOptions,
-      created_by_email: user.email,
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['question-bank-items'] }); toast.success('Question ajoutée à la banque'); },
+    mutationFn: (question) => {
+      const payload = {
+        label: question.label,
+        athleteLabel: question.athleteLabel || '',
+        description: question.description || '',
+        type: question.type,
+        required: question.required || false,
+        created_by_email: user.email,
+      };
+      if (question.type === 'select' && question.selectOptions) payload.selectOptions = question.selectOptions;
+      if (question.type === 'scale' && question.scaleOptions) payload.scaleOptions = question.scaleOptions;
+      return base44.entities.QuestionBankItem.create(payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['question-bank-items'] });
+      toast.success('Question ajoutée à la banque');
+    },
+    onError: (e) => {
+      toast.error(`Impossible d'ajouter à la banque : ${e.message}`);
+    },
   });
 
   const resetQuestion = () => setNewQuestion({ ...EMPTY_QUESTION, selectOptions: { choices: [
@@ -301,7 +313,19 @@ export default function QuestionnaireEditorFull({ user, template, onSave, onCanc
                                     <div className="flex gap-1">
                                       <Button type="button" variant="ghost" size="icon" onClick={() => editQuestion(q)} className="text-blue-600 hover:text-blue-700"><Edit2 className="w-4 h-4" /></Button>
                                       <Button type="button" variant="ghost" size="icon" onClick={() => duplicateQuestion(q)} className="text-green-600 hover:text-green-700"><Copy className="w-4 h-4" /></Button>
-                                      {isAdmin && <Button type="button" variant="ghost" size="icon" onClick={() => addToBankMutation.mutate(q)} className="text-purple-600 hover:text-purple-700" title="Ajouter à la banque"><Database className="w-4 h-4" /></Button>}
+                                      {isAdmin && (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => addToBankMutation.mutate(q)}
+                                          disabled={addToBankMutation.isPending}
+                                          className="text-purple-600 hover:text-purple-700"
+                                          title="Ajouter à la banque"
+                                        >
+                                          <Database className={`w-4 h-4 ${addToBankMutation.isPending ? 'animate-pulse' : ''}`} />
+                                        </Button>
+                                      )}
                                       <Button type="button" variant="ghost" size="icon" onClick={() => removeQuestion(q.id)} className="text-red-600 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
                                     </div>
                                   </div>

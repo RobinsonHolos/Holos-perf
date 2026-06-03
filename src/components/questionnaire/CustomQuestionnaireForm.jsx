@@ -297,7 +297,9 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
 
               {q.type === 'select' && q.selectOptions?.choices && (
                 <div className="ml-0 sm:ml-9">
-                  <p className="text-xs text-slate-400 mb-2">Plusieurs choix possibles</p>
+                  <p className="text-xs text-slate-400 mb-2">
+                    {q.selectOptions?.multiSelect ? 'Plusieurs choix possibles' : 'Un seul choix possible'}
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {q.selectOptions.choices.map((choice, choiceIndex) => {
                       const isBlack = choice.color?.toLowerCase() === '#000000' || choice.color?.toLowerCase() === '#000' || choice.color?.toLowerCase() === 'black';
@@ -310,11 +312,14 @@ export default function CustomQuestionnaireForm({ questionnaire, user, onComplet
                       const toggle = () => {
                         setResponses(prev => {
                           const prevSel = Array.isArray(prev[q.id]) ? prev[q.id] : (prev[q.id] ? [prev[q.id]] : []);
-                          const already = prevSel.includes(choiceKey);
-                          const next = already
-                            ? prevSel.filter(v => v !== choiceKey)
-                            : [...prevSel, choiceKey];
-                          return { ...prev, [q.id]: next };
+                          if (q.selectOptions?.multiSelect) {
+                            const already = prevSel.includes(choiceKey);
+                            const next = already ? prevSel.filter(v => v !== choiceKey) : [...prevSel, choiceKey];
+                            return { ...prev, [q.id]: next };
+                          } else {
+                            const already = prevSel.includes(choiceKey);
+                            return { ...prev, [q.id]: already ? [] : [choiceKey] };
+                          }
                         });
                       };
 

@@ -68,7 +68,7 @@ export default function QuestionBank() {
 
   const { data: questions = [] } = useQuery({
     queryKey: ['question-bank'],
-    queryFn: () => base44.entities.QuestionBankItem.list('-created_date', 200),
+    queryFn: () => base44.entities.QuestionBankItem.list('-created_at', 200),
     enabled: !!user && isAdmin,
   });
 
@@ -496,7 +496,14 @@ export default function QuestionBank() {
                 {newQuestion.type === 'select' && (
                   <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-4">
                     <h4 className="font-medium text-slate-800 text-sm">Options de choix multiples</h4>
-                    
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="multi-select-bank"
+                        checked={newQuestion.selectOptions?.multiSelect ?? false}
+                        onCheckedChange={(checked) => setNewQuestion({ ...newQuestion, selectOptions: { ...newQuestion.selectOptions, multiSelect: checked } })}
+                      />
+                      <Label htmlFor="multi-select-bank" className="text-sm cursor-pointer">Permettre plusieurs réponses</Label>
+                    </div>
                     <div className="space-y-3">
                       {(newQuestion.selectOptions?.choices || []).map((choice, index) => (
                         <div key={index} className="p-3 bg-white border rounded-lg space-y-3">

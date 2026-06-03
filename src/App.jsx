@@ -13,6 +13,9 @@ import StravaCallbackPage from './pages/StravaCallback';
 import ObjectiveDataPage from './pages/ObjectiveData';
 import CoachPermissionsPage from './pages/CoachPermissionsPage';
 import CoachHomeIndividualPage from './pages/CoachHomeIndividual';
+import CoachDailyQuestionnairePage from './pages/CoachDailyQuestionnaire';
+import CoachFillAthleteQuestionnairePage from './pages/CoachFillAthleteQuestionnaire';
+import CoachDailyResponsesPage from './pages/CoachDailyResponses';
 import OnboardingPage from './pages/Onboarding';
 import PendingApprovalPage from './pages/PendingApproval';
 import LoginPage from './pages/LoginPage';
@@ -87,6 +90,9 @@ const AppRouter = () => {
       <Route path="/ObjectiveData"      element={<LayoutWrapper currentPageName="ObjectiveData"><ObjectiveDataPage /></LayoutWrapper>} />
       <Route path="/CoachPermissions"   element={<LayoutWrapper currentPageName="CoachPermissions"><CoachPermissionsPage /></LayoutWrapper>} />
       <Route path="/CoachHomeIndividual" element={<LayoutWrapper currentPageName="CoachHomeIndividual"><CoachHomeIndividualPage /></LayoutWrapper>} />
+      <Route path="/CoachDailyQuestionnaire" element={<LayoutWrapper currentPageName="CoachDailyQuestionnaire"><CoachDailyQuestionnairePage /></LayoutWrapper>} />
+      <Route path="/CoachFillAthleteQuestionnaire" element={<LayoutWrapper currentPageName="CoachFillAthleteQuestionnaire"><CoachFillAthleteQuestionnairePage /></LayoutWrapper>} />
+      <Route path="/CoachDailyResponses" element={<LayoutWrapper currentPageName="CoachDailyResponses"><CoachDailyResponsesPage /></LayoutWrapper>} />
       <Route path="/JoinClub"           element={<JoinClubPage />} />
       <Route path="/StravaCallback"     element={<StravaCallbackPage />} />
       <Route path="*"                   element={<PageNotFound />} />
