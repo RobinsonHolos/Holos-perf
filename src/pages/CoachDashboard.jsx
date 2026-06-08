@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { supabase as base44 } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -84,27 +84,14 @@ const generateDemoData = () => {
   return logs.sort((a, b) => new Date(b.training_date) - new Date(a.training_date));
 };
 
-// Default date range: last 2 complete weeks Mon-Sun
-// Week 1 = the week before last, Week 2 = last complete week
-// "Complete" means Mon to Sun, regardless of today's day
+// Default date range: last 30 days
 const getDefaultDates = () => {
   const today = new Date();
-  const dow = today.getDay(); // 0=Sun,1=Mon,...,6=Sat
-  // Days since last Monday (if today is Monday, daysFromMon=0)
-  const daysFromMon = dow === 0 ? 6 : dow - 1;
-  // Start of current week (Monday)
-  const startOfThisWeek = new Date(today);
-  startOfThisWeek.setDate(today.getDate() - daysFromMon);
-  // End of current week (Sunday)
-  const endOfThisWeek = new Date(startOfThisWeek);
-  endOfThisWeek.setDate(startOfThisWeek.getDate() + 6);
-  // Start of previous week
-  const startOfPrevWeek = new Date(startOfThisWeek);
-  startOfPrevWeek.setDate(startOfThisWeek.getDate() - 7);
-
+  const start = new Date(today);
+  start.setDate(today.getDate() - 29);
   return {
-    start: format(startOfPrevWeek, 'yyyy-MM-dd'),
-    end: format(endOfThisWeek, 'yyyy-MM-dd'),
+    start: format(start, 'yyyy-MM-dd'),
+    end: format(today, 'yyyy-MM-dd'),
   };
 };
 
@@ -239,7 +226,16 @@ export default function CoachDashboard() {
         const firstQuestionId = responseTemplate?.questions?.[0]?.id;
         const firstQuestion = responseTemplate?.questions?.[0];
         const hasSelectFirstQuestion = firstQuestion?.type === 'select';
-        const sessionType = (hasSelectFirstQuestion && firstQuestionId) ? response.responses?.[firstQuestionId] : null;
+        let sessionType = null;
+        if (hasSelectFirstQuestion && firstQuestionId) {
+          const rawVal = response.responses?.[firstQuestionId];
+          if (rawVal !== undefined && rawVal !== null) {
+            const choices = firstQuestion?.selectOptions?.choices || [];
+            const singleVal = Array.isArray(rawVal) ? rawVal[0] : rawVal;
+            const idx = parseInt(singleVal, 10);
+            sessionType = (!isNaN(idx) && choices[idx]) ? choices[idx].label : singleVal;
+          }
+        }
         return {
           id: response.id,
           athlete_email: response.athlete_email,
@@ -255,11 +251,49 @@ export default function CoachDashboard() {
     enabled: !!user && (isAdmin || isCoach),
   });
 
+  const { data: rawTrainingLogs = [] } = useQuery({
+    queryKey: ['training-logs-coach-dashboard', user?.email, coachGroup?.id, coachClub?.id],
+    queryFn: async () => {
+      if (isAdmin) {
+        return await base44.entities.TrainingLog.list('-training_date', 2000);
+      } else if (isCoach) {
+        let coachAthleteEmails = [...(coachGroup?.athlete_emails || [])];
+        if (!isIndividualView && coachClub) {
+          coachAthleteEmails = [...new Set([...coachAthleteEmails, ...(coachClub.athlete_emails || [])])];
+        }
+        if (coachAthleteEmails.length === 0) return [];
+        const all = await base44.entities.TrainingLog.list('-training_date', 2000);
+        return all.filter(l => coachAthleteEmails.includes(l.athlete_email));
+      }
+      return [];
+    },
+    enabled: !!user && (isAdmin || isCoach),
+  });
+
+  const mappedTrainingLogs = useMemo(() => rawTrainingLogs.map(log => ({
+    id: log.id,
+    athlete_email: log.athlete_email,
+    athlete_name: log.athlete_name,
+    training_date: log.training_date,
+    template_id: null,
+    session_type: log.session_type || 'entrainement',
+    duration_minutes: log.duration_minutes,
+    fatigue: log.fatigue,
+    intensite: log.intensite,
+    sommeil: log.sommeil,
+    plaisir: log.plaisir,
+    harmonie_proches: log.harmonie_proches,
+    maitrise_technique: log.maitrise_technique,
+    maitrise_tactique: log.maitrise_tactique,
+    epanouissement: log.epanouissement,
+  })), [rawTrainingLogs]);
+
   const hasRealAthletes = isCoach
     ? (coachGroup?.athlete_emails?.length || 0) > 0 || (coachClub?.athlete_emails?.length || 0) > 0
     : true;
-  const allLogs = realLogs.length > 0 ? realLogs : (hasRealAthletes ? [] : demoData);
-  const isUsingDemoData = realLogs.length === 0 && !hasRealAthletes;
+  const combinedRealLogs = useMemo(() => [...realLogs, ...mappedTrainingLogs], [realLogs, mappedTrainingLogs]);
+  const allLogs = combinedRealLogs.length > 0 ? combinedRealLogs : (hasRealAthletes ? [] : demoData);
+  const isUsingDemoData = combinedRealLogs.length === 0 && !hasRealAthletes;
 
 
 
@@ -374,6 +408,19 @@ export default function CoachDashboard() {
       }
     });
 
+    // Ajouter les types de séance des training logs si des données existent
+    if (userFilteredLogs.some(l => !l.template_id)) {
+      const TL_TYPES = {
+        entrainement: { label: 'Entraînement', css: 'bg-blue-100 text-blue-700' },
+        competition: { label: 'Compétition', css: 'bg-amber-100 text-amber-700' },
+        effort_type: { label: 'Effort type', css: 'bg-purple-100 text-purple-700' },
+        off: { label: 'Off', css: 'bg-slate-100 text-slate-600' },
+      };
+      Object.entries(TL_TYPES).forEach(([key, { label, css }]) => {
+        if (!labels[key]) { labels[key] = label; colors[key] = css; }
+      });
+    }
+
     // Toujours inclure 'questionnaire' pour les questionnaires sans QCM en première question
     labels['questionnaire'] = 'Questionnaire';
     colors['questionnaire'] = 'bg-indigo-100 text-indigo-700';
@@ -392,17 +439,19 @@ export default function CoachDashboard() {
       ? assignedTemplates.filter(t => templateIdsInLogs.includes(t.id))
       : assignedTemplates;
 
-    if (relevantTemplates.length === 0) {
+    const normalizeLabel = (str) => (str || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .trim();
+
+    const hasTrainingLogs = userFilteredLogs.some(l => !l.template_id);
+
+    if (relevantTemplates.length === 0 && !hasTrainingLogs) {
       setAthleteMetrics({ labels: {}, colors: {}, idToCanonical: {} });
       setSelectedMetrics([]);
       return;
     }
 
-    const normalizeLabel = (str) => (str || '').toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .trim();
-
-    // Regrouper les questions de même label (ex: "estime de soi" de 2 templates → 1 clé canonique)
+    // Regrouper les questions de meme label
     const groupedByLabel = new Map();
     relevantTemplates.forEach(template => {
       (template.questions || []).filter(q => q.type === 'scale' || q.type === 'number').forEach(question => {
@@ -415,6 +464,29 @@ export default function CoachDashboard() {
         }
       });
     });
+
+    // Ajouter les champs fixes des training logs s'il y en a dans les donnees
+    if (hasTrainingLogs) {
+      const TRAINING_LOG_FIELDS = [
+        { id: 'fatigue', label: 'Fatigue' },
+        { id: 'intensite', label: 'Intensité' },
+        { id: 'sommeil', label: 'Sommeil' },
+        { id: 'plaisir', label: 'Plaisir' },
+        { id: 'harmonie_proches', label: 'Harmonie avec les proches' },
+        { id: 'maitrise_technique', label: 'Maîtrise technique' },
+        { id: 'maitrise_tactique', label: 'Maîtrise tactique' },
+        { id: 'epanouissement', label: 'Épanouissement' },
+      ];
+      TRAINING_LOG_FIELDS.forEach(field => {
+        const norm = normalizeLabel(field.label);
+        if (!groupedByLabel.has(norm)) {
+          groupedByLabel.set(norm, { representative: field, ids: [field.id] });
+        } else {
+          const existing = groupedByLabel.get(norm);
+          if (!existing.ids.includes(field.id)) existing.ids.push(field.id);
+        }
+      });
+    }
 
     if (groupedByLabel.size === 0) {
       setAthleteMetrics({ labels: {}, colors: {}, idToCanonical: {} });
@@ -435,22 +507,20 @@ export default function CoachDashboard() {
       const label = normalizeLabel(question.athleteLabel || question.label);
       labels[canonicalKey] = question.athleteLabel || question.label;
 
-      let color = question.scaleOptions?.color;
-      if (!color || color === '#ffffff' || color === '#000000') {
-        if (label.includes('fatigue')) color = '#ef4444';
-        else if (label.includes('intensit')) color = '#f59e0b';
-        else if (label.includes('sommeil')) color = '#8b5cf6';
-        else if (label.includes('plaisir')) color = '#10b981';
-        else if (label.includes('harmonie') || label.includes('proches')) color = '#06b6d4';
-        else if (label.includes('technique')) color = '#3b82f6';
-        else if (label.includes('tactique')) color = '#6366f1';
-        else if (label.includes('epanouissement')) color = '#ec4899';
-        else if (label.includes('dynamisme')) color = '#84cc16';
-        else if (label.includes('estime')) color = '#a855f7';
-        else if (label.includes('cardiovasculaire')) color = '#f43f5e';
-        else if (label.includes('musculaire')) color = '#fb923c';
-        else color = defaultColors[colorIdx % defaultColors.length];
-      }
+      let color;
+      if (label.includes('fatigue')) color = '#ef4444';
+      else if (label.includes('intensit')) color = '#f59e0b';
+      else if (label.includes('sommeil')) color = '#8b5cf6';
+      else if (label.includes('plaisir')) color = '#10b981';
+      else if (label.includes('harmonie') || label.includes('proches')) color = '#06b6d4';
+      else if (label.includes('technique')) color = '#3b82f6';
+      else if (label.includes('tactique')) color = '#6366f1';
+      else if (label.includes('epanouissement')) color = '#ec4899';
+      else if (label.includes('dynamisme')) color = '#84cc16';
+      else if (label.includes('estime')) color = '#a855f7';
+      else if (label.includes('cardiovasculaire')) color = '#f43f5e';
+      else if (label.includes('musculaire')) color = '#fb923c';
+      else color = defaultColors[colorIdx % defaultColors.length];
       colors[canonicalKey] = color;
       metricKeys.push(canonicalKey);
       colorIdx++;

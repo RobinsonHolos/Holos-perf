@@ -16,7 +16,7 @@ import StatCard from '../components/dashboard/StatCard';
 import { 
   Activity, TrendingUp, Calendar, RefreshCw, ArrowLeft, Zap
 } from 'lucide-react';
-import { format, isAfter, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -47,17 +47,11 @@ const defaultColors = [
 
 const getDefaultDates = () => {
   const today = new Date();
-  const dow = today.getDay();
-  const daysFromMon = dow === 0 ? 6 : dow - 1;
-  const startOfThisWeek = new Date(today);
-  startOfThisWeek.setDate(today.getDate() - daysFromMon);
-  const endOfThisWeek = new Date(startOfThisWeek);
-  endOfThisWeek.setDate(startOfThisWeek.getDate() + 6);
-  const startOfPrevWeek = new Date(startOfThisWeek);
-  startOfPrevWeek.setDate(startOfThisWeek.getDate() - 7);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 29);
   return {
-    start: format(startOfPrevWeek, 'yyyy-MM-dd'),
-    end: format(endOfThisWeek, 'yyyy-MM-dd'),
+    start: format(start, 'yyyy-MM-dd'),
+    end: format(today, 'yyyy-MM-dd'),
   };
 };
 
@@ -70,6 +64,15 @@ export default function PersonalDashboard() {
   const [metricLabels, setMetricLabels] = useState({});
   const [metricColors, setMetricColors] = useState({});
   const [dynamicSessionTypes, setDynamicSessionTypes] = useState({ labels: {}, colors: {} });
+
+  const { data: myTrainingLogs = [] } = useQuery({
+    queryKey: ['my-training-logs', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return [];
+      return await base44.entities.TrainingLog.filter({ athlete_email: user.email }, '-training_date', 1000);
+    },
+    enabled: !!user?.email,
+  });
 
   // Charger les questionnaires assignés à l'utilisateur
   const { data: assignedQuestionnaires = [] } = useQuery({
@@ -86,13 +89,36 @@ export default function PersonalDashboard() {
     enabled: !!user,
   });
 
-  // Construire dynamiquement les métriques et types de séance à partir du questionnaire assigné
+  const TRAINING_LOG_SESSION_TYPES = {
+    entrainement: { label: 'Entraînement', css: 'bg-blue-100 text-blue-700' },
+    competition: { label: 'Compétition', css: 'bg-amber-100 text-amber-700' },
+    effort_type: { label: 'Effort type', css: 'bg-purple-100 text-purple-700' },
+    off: { label: 'Off', css: 'bg-slate-100 text-slate-600' },
+  };
+
+  const TRAINING_LOG_METRIC_FIELDS = [
+    { id: 'fatigue', label: 'Fatigue', color: '#ef4444' },
+    { id: 'intensite', label: 'Intensité', color: '#f59e0b' },
+    { id: 'sommeil', label: 'Sommeil', color: '#8b5cf6' },
+    { id: 'plaisir', label: 'Plaisir', color: '#10b981' },
+    { id: 'harmonie_proches', label: 'Harmonie avec les proches', color: '#06b6d4' },
+    { id: 'maitrise_technique', label: 'Maîtrise technique', color: '#3b82f6' },
+    { id: 'maitrise_tactique', label: 'Maîtrise tactique', color: '#6366f1' },
+    { id: 'epanouissement', label: 'Épanouissement', color: '#ec4899' },
+  ];
+
+  // Construire dynamiquement les métriques et types de séance
   useEffect(() => {
+    const sessionLabels = {};
+    const sessionColors = {};
+    const metricLabelMap = {};
+    const metricColorMap = {};
+    const metricKeys = [];
+
     if (assignedQuestionnaires.length > 0) {
       const primaryQuestionnaire = assignedQuestionnaires[0];
       const questions = primaryQuestionnaire.questions || [];
-      
-      // Types de séance dynamiques depuis la première question select
+
       const firstQuestion = questions[0];
       if (firstQuestion?.type === 'select') {
         const defaultSessionTypeColors = [
@@ -101,40 +127,48 @@ export default function PersonalDashboard() {
           'bg-green-100 text-green-700', 'bg-rose-100 text-rose-700',
         ];
         const choices = firstQuestion.selectOptions?.choices || [];
-        const labels = {};
-        const colors = {};
         choices.forEach((choice, index) => {
-          labels[choice.label] = choice.label;
-          colors[choice.label] = defaultSessionTypeColors[index % defaultSessionTypeColors.length];
+          sessionLabels[choice.label] = choice.label;
+          sessionColors[choice.label] = defaultSessionTypeColors[index % defaultSessionTypeColors.length];
         });
-        setDynamicSessionTypes({ labels, colors });
-        setSessionTypeFilters(Object.keys(labels));
       }
 
-      // Extraire les questions de type numérique/scale
-      const numericQuestions = questions.filter(q => 
-        q.type === 'scale' || q.type === 'number'
-      );
+      questions.filter(q => q.type === 'scale' || q.type === 'number').forEach((question, index) => {
+        metricLabelMap[question.id] = question.athleteLabel || question.label;
+        metricColorMap[question.id] = defaultColors[index % defaultColors.length];
+        metricKeys.push(question.id);
+      });
+    }
 
-      const labels = {};
-      const colors = {};
-      const metricKeys = [];
-
-      numericQuestions.forEach((question, index) => {
-        const key = question.id;
-        labels[key] = question.athleteLabel || question.label;
-        colors[key] = defaultColors[index % defaultColors.length];
-        metricKeys.push(key);
+    if (myTrainingLogs.length > 0) {
+      Object.entries(TRAINING_LOG_SESSION_TYPES).forEach(([key, { label, css }]) => {
+        if (!sessionLabels[key]) { sessionLabels[key] = label; sessionColors[key] = css; }
       });
 
-      setMetricLabels(labels);
-      setMetricColors(colors);
-      
+      const normalizeStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+      const existingNorms = new Set(Object.values(metricLabelMap).map(normalizeStr));
+      TRAINING_LOG_METRIC_FIELDS.forEach(field => {
+        if (!metricLabelMap[field.id] && !existingNorms.has(normalizeStr(field.label))) {
+          metricLabelMap[field.id] = field.label;
+          metricColorMap[field.id] = field.color;
+          metricKeys.push(field.id);
+        }
+      });
+    }
+
+    if (Object.keys(sessionLabels).length > 0) {
+      setDynamicSessionTypes({ labels: sessionLabels, colors: sessionColors });
+      setSessionTypeFilters(Object.keys(sessionLabels));
+    }
+
+    if (metricKeys.length > 0) {
+      setMetricLabels(metricLabelMap);
+      setMetricColors(metricColorMap);
       if (selectedMetrics.length === 0) {
         setSelectedMetrics(metricKeys.slice(0, Math.min(4, metricKeys.length)));
       }
     }
-  }, [assignedQuestionnaires]);
+  }, [assignedQuestionnaires, myTrainingLogs]);
 
   // Charger les réponses aux questionnaires de l'utilisateur actuel
   const { data: allQuestionnaireResponses = [], isLoading, refetch } = useQuery({
@@ -151,6 +185,23 @@ export default function PersonalDashboard() {
     },
     enabled: !!user?.email && assignedQuestionnaires.length > 0,
   });
+
+  const mappedMyTrainingLogs = myTrainingLogs.map(log => ({
+    id: log.id,
+    athlete_email: log.athlete_email,
+    athlete_name: log.athlete_name,
+    training_date: log.training_date,
+    session_type: log.session_type || 'entrainement',
+    duration_minutes: log.duration_minutes,
+    fatigue: log.fatigue,
+    intensite: log.intensite,
+    sommeil: log.sommeil,
+    plaisir: log.plaisir,
+    harmonie_proches: log.harmonie_proches,
+    maitrise_technique: log.maitrise_technique,
+    maitrise_tactique: log.maitrise_tactique,
+    epanouissement: log.epanouissement,
+  }));
 
   const myResponses = allQuestionnaireResponses.map(response => {
     const submittedDate = response.submitted_date ? new Date(response.submitted_date) : new Date();
@@ -173,10 +224,20 @@ export default function PersonalDashboard() {
       });
     }
     
-    // session_type = valeur de la première question (type de séance)
-    const firstQuestionId = assignedQuestionnaires.find(q => q.id === response.template_id)?.questions?.[0]?.id;
-    const rawSessionType = firstQuestionId ? response.responses?.[firstQuestionId] : null;
-    const sessionType = Array.isArray(rawSessionType) ? rawSessionType[0] : rawSessionType;
+    // session_type = valeur de la première question (type de séance), résolu depuis l'indice QCM
+    const firstTemplate = assignedQuestionnaires.find(q => q.id === response.template_id);
+    const firstQuestionId = firstTemplate?.questions?.[0]?.id;
+    const firstQuestion = firstTemplate?.questions?.[0];
+    let sessionType = null;
+    if (firstQuestion?.type === 'select' && firstQuestionId) {
+      const rawVal = response.responses?.[firstQuestionId];
+      if (rawVal !== undefined && rawVal !== null) {
+        const choices = firstQuestion?.selectOptions?.choices || [];
+        const singleVal = Array.isArray(rawVal) ? rawVal[0] : rawVal;
+        const idx = parseInt(singleVal, 10);
+        sessionType = (!isNaN(idx) && choices[idx]) ? choices[idx].label : singleVal;
+      }
+    }
 
     return {
       id: response.id,
@@ -192,12 +253,14 @@ export default function PersonalDashboard() {
 
 
 
+  const allMyLogs = [...myResponses, ...mappedMyTrainingLogs];
+
   // Filter logs
-  const filteredLogs = myResponses.filter(log => {
+  const filteredLogs = allMyLogs.filter(log => {
     const logDate = parseISO(log.training_date);
     const start = parseISO(startDate);
     const end = parseISO(endDate);
-    const inDateRange = isAfter(logDate, start) && logDate <= end;
+    const inDateRange = logDate >= start && logDate <= end;
     const matchesSessionType = sessionTypeFilters.length === 0 || sessionTypeFilters.includes(log.session_type);
     return inDateRange && matchesSessionType;
   });
@@ -283,7 +346,7 @@ export default function PersonalDashboard() {
           </div>
         </div>
 
-        {myResponses.length === 0 ? (
+        {allMyLogs.length === 0 ? (
           <Card className="shadow-sm border-0">
             <CardContent className="p-8 text-center">
               <Activity className="w-16 h-16 text-slate-300 mx-auto mb-4" />

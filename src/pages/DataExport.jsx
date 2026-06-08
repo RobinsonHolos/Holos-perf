@@ -31,6 +31,22 @@ export default function DataExport() {
     enabled: isCoach && !!user?.email,
   });
 
+  const { data: coachClub } = useQuery({
+    queryKey: ['coach-club-export', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return null;
+      const clubs = await base44.entities.Club.list();
+      return clubs.find(c => (c.coach_emails || []).includes(user.email)) || null;
+    },
+    enabled: isCoach && !!user?.email,
+  });
+
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['all-users-export'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: !!user && (isAdmin || isCoach),
+  });
+
   const { data: allLogs = [] } = useQuery({
     queryKey: ['all-logs-export'],
     queryFn: () => base44.entities.TrainingLog.list('-training_date', 5000),
@@ -49,27 +65,34 @@ export default function DataExport() {
     enabled: !!user
   });
 
+  const coachAthleteEmailSet = new Set([
+    ...(coachGroup?.athlete_emails || []),
+    ...(coachClub?.athlete_emails || []),
+  ]);
+
   const userFilteredLogs = (() => {
     if (isAdmin) return allLogs;
-    if (isCoach && coachGroup) return allLogs.filter(log => coachGroup.athlete_emails.includes(log.athlete_email));
+    if (isCoach && coachAthleteEmailSet.size > 0) return allLogs.filter(log => coachAthleteEmailSet.has(log.athlete_email));
     return allLogs;
   })();
 
   const userFilteredResponses = (() => {
     if (isAdmin) return allResponses;
-    if (isCoach && coachGroup) return allResponses.filter(resp => coachGroup.athlete_emails.includes(resp.athlete_email));
+    if (isCoach && coachAthleteEmailSet.size > 0) return allResponses.filter(resp => coachAthleteEmailSet.has(resp.athlete_email));
     return allResponses;
   })();
 
   const allAthleteEmails = new Set([
     ...userFilteredLogs.map(log => log.athlete_email),
-    ...userFilteredResponses.map(resp => resp.athlete_email)
+    ...userFilteredResponses.map(resp => resp.athlete_email),
+    ...(isCoach ? [...coachAthleteEmailSet] : []),
   ]);
-  
+
   const athletes = [...allAthleteEmails].map(email => {
     const log = userFilteredLogs.find(l => l.athlete_email === email);
     const response = userFilteredResponses.find(r => r.athlete_email === email);
-    return { email, name: log?.athlete_name || response?.athlete_name || email };
+    const userRecord = allUsers.find(u => u.email === email);
+    return { email, name: log?.athlete_name || response?.athlete_name || userRecord?.full_name || email };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   const filterData = () => {
@@ -102,10 +125,15 @@ export default function DataExport() {
     const templateIds = new Set(responses.map(resp => resp.template_id).filter(Boolean));
     const allQuestionIds = new Set();
     const questionIdToLabel = {};
+    const questionMap = {};
     allTemplates.forEach(template => {
       if (templateIds.has(template.id) && Array.isArray(template.questions)) {
         template.questions.forEach(q => {
-          if (q.id) { allQuestionIds.add(q.id); questionIdToLabel[q.id] = q.athleteLabel || q.label || q.id; }
+          if (q.id) {
+            allQuestionIds.add(q.id);
+            questionIdToLabel[q.id] = q.athleteLabel || q.label || q.id;
+            questionMap[q.id] = q;
+          }
         });
       }
     });
@@ -139,7 +167,18 @@ export default function DataExport() {
         ...(logs.length > 0 ? ['', '', '', '', '', '', '', '', '', '', ''] : []),
         ...Array.from(allQuestionIds).map(questionId => {
           const value = resp.responses?.[questionId];
-          return value !== undefined ? String(value).replace(/"/g, '""') : '';
+          if (value === undefined || value === null) return '';
+          const question = questionMap[questionId];
+          if (question?.type === 'select' && Array.isArray(value)) {
+            const choices = question.selectOptions?.choices || [];
+            const resolved = value.map(v => {
+              const idx = parseInt(v, 10);
+              return (!isNaN(idx) && choices[idx]) ? (choices[idx].label || v) : v;
+            }).join('; ');
+            return resolved.replace(/"/g, '""');
+          }
+          if (Array.isArray(value)) return value.join('; ').replace(/"/g, '""');
+          return String(value).replace(/"/g, '""');
         })
       ];
     });
