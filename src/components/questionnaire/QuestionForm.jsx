@@ -71,7 +71,7 @@ export default function QuestionForm({
           <h4 className="font-medium text-slate-800 text-sm">Condition d'apparition (optionnel)</h4>
           <div className="flex items-center gap-2">
             <Checkbox id="has-cond" checked={!!newQuestion.condition}
-              onCheckedChange={(c) => setNewQuestion({ ...newQuestion, condition: c ? { type: 'show', questionId: '', expectedValue: '' } : null })} />
+              onCheckedChange={(c) => setNewQuestion({ ...newQuestion, condition: c ? { type: 'show', questionId: '', expectedValues: [] } : null })} />
             <Label htmlFor="has-cond" className="text-sm cursor-pointer">Ajouter une condition</Label>
           </div>
           {newQuestion.condition && (
@@ -83,7 +83,7 @@ export default function QuestionForm({
                   <SelectItem value="hide">Masquer si</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={newQuestion.condition.questionId || ''} onValueChange={(v) => setNewQuestion({ ...newQuestion, condition: { ...newQuestion.condition, questionId: v, expectedValue: '' } })}>
+              <Select value={newQuestion.condition.questionId || ''} onValueChange={(v) => setNewQuestion({ ...newQuestion, condition: { ...newQuestion.condition, questionId: v, expectedValues: [] } })}>
                 <SelectTrigger className="text-sm"><SelectValue placeholder="Sélectionner une question" /></SelectTrigger>
                 <SelectContent>
                   {formData.questions.filter(q => q.id !== editingQuestionId && q.type === 'select').map(q => (
@@ -94,12 +94,34 @@ export default function QuestionForm({
               {newQuestion.condition.questionId && (() => {
                 const sq = formData.questions.find(q => q.id === newQuestion.condition.questionId);
                 return sq?.selectOptions?.choices ? (
-                  <Select value={newQuestion.condition.expectedValue || ''} onValueChange={(v) => setNewQuestion({ ...newQuestion, condition: { ...newQuestion.condition, expectedValue: v } })}>
-                    <SelectTrigger className="text-sm"><SelectValue placeholder="Sélectionner une réponse" /></SelectTrigger>
-                    <SelectContent>
-                      {sq.selectOptions.choices.map((c, i) => <SelectItem key={i} value={c.label}>{c.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-slate-500">Sélectionner une ou plusieurs réponses</Label>
+                    <div className="space-y-1.5">
+                      {sq.selectOptions.choices.map((c, i) => {
+                        const val = c.label;
+                        const selected = (newQuestion.condition.expectedValues || []).includes(val);
+                        return (
+                          <div key={i} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`cond-val-${i}`}
+                              checked={selected}
+                              onCheckedChange={(checked) => {
+                                const current = newQuestion.condition.expectedValues || [];
+                                const next = checked ? [...current, val] : current.filter(v => v !== val);
+                                setNewQuestion({ ...newQuestion, condition: { ...newQuestion.condition, expectedValues: next } });
+                              }}
+                            />
+                            <Label htmlFor={`cond-val-${i}`} className="text-sm cursor-pointer font-normal">{val || `Choix ${i + 1}`}</Label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {(newQuestion.condition.expectedValues || []).length > 0 && (
+                      <p className="text-xs text-orange-600 font-medium">
+                        {(newQuestion.condition.expectedValues || []).length} réponse(s) sélectionnée(s)
+                      </p>
+                    )}
+                  </div>
                 ) : null;
               })()}
             </div>

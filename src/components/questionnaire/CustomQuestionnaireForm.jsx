@@ -24,9 +24,13 @@ const isQuestionVisible = (q, currentResponses, allQuestions = []) => {
   const answer = currentResponses[q.condition.questionId];
   const sourceQuestion = allQuestions.find(sq => sq.id === q.condition.questionId);
   const resolved = resolveSelectionLabels(answer, sourceQuestion);
+  // Support both new multi-values (expectedValues) and legacy single value (expectedValue)
+  const expectedValues = q.condition.expectedValues?.length > 0
+    ? q.condition.expectedValues
+    : (q.condition.expectedValue ? [q.condition.expectedValue] : []);
   const conditionMet = Array.isArray(resolved)
-    ? resolved.includes(q.condition.expectedValue)
-    : resolved === q.condition.expectedValue;
+    ? resolved.some(r => expectedValues.includes(r))
+    : expectedValues.includes(resolved);
   const conditionType = q.condition.type || 'show';
   if (conditionType === 'show' && !conditionMet) return false;
   if (conditionType === 'hide' && conditionMet) return false;

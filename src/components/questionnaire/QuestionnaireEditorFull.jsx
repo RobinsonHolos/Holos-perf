@@ -54,7 +54,13 @@ function AthletePreview({ questionnaire }) {
           <div className="space-y-6">
             {questionnaire.questions.map((q, index) => {
               if (q.condition) {
-                const met = responses[q.condition.questionId] === q.condition.expectedValue;
+                const expectedValues = q.condition.expectedValues?.length > 0
+                  ? q.condition.expectedValues
+                  : (q.condition.expectedValue ? [q.condition.expectedValue] : []);
+                const answer = responses[q.condition.questionId];
+                const met = Array.isArray(answer)
+                  ? answer.some(a => expectedValues.includes(a))
+                  : expectedValues.includes(answer);
                 if (q.condition.type === 'show' && !met) return null;
                 if (q.condition.type === 'hide' && met) return null;
               }
