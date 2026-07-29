@@ -27,6 +27,7 @@ const coachLinks = [
   { label: 'Gestion de groupe', icon: Users, to: createPageUrl('GroupManagement') },
   { label: 'Messages', icon: MessageSquare, to: createPageUrl('Messages') },
   { label: 'Questionnaires', icon: ClipboardList, to: createPageUrl('CoachQuestionnaires') },
+  { label: 'Export données', icon: Download, to: createPageUrl('DataExport') },
   { label: 'Paramètres', icon: Settings, to: '/Settings' },
 ];
 

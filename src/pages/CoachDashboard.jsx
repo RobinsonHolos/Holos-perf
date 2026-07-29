@@ -15,9 +15,9 @@ import HistogramChart from '../components/dashboard/HistogramChart';
 import MetricSelector from '../components/dashboard/MetricSelector';
 import StatCard from '../components/dashboard/StatCard';
 import SummaryStatsTable from '../components/dashboard/SummaryStatsTable';
-import { 
-  Users, Activity, TrendingUp, Calendar, Filter, 
-  ChevronDown, ChevronUp, RefreshCw, ArrowLeft, Search, Zap
+import {
+  Users, Activity, TrendingUp, Calendar, Filter,
+  ChevronDown, ChevronUp, RefreshCw, ArrowLeft, Search, Zap, Download
 } from 'lucide-react';
 import { format, subDays, isAfter, parseISO, startOfWeek, startOfMonth } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -354,9 +354,10 @@ export default function CoachDashboard() {
         logs = logs.filter(log => selectedAthleteEmails.includes(log.athlete_email));
       } else if (selectionMode === 'group' && selectedGroupId) {
         const group = allGroups.find(g => g.id === selectedGroupId);
-        if (group) {
-          logs = logs.filter(log => group.athlete_emails.includes(log.athlete_email));
-        }
+        logs = group ? logs.filter(log => group.athlete_emails.includes(log.athlete_email)) : [];
+      } else {
+        // Aucune sélection précise (mode "Tous", ou "Athlètes"/"Groupe" sans choix fait) : rien à afficher
+        logs = [];
       }
     }
 
@@ -381,6 +382,12 @@ export default function CoachDashboard() {
 
   // Extract dynamic session types from the templates actually used in visible logs
   useEffect(() => {
+    if ((isAdmin || isCoach) && userFilteredLogs.length === 0) {
+      setDynamicSessionTypes({ labels: {}, colors: {} });
+      setSessionTypeFilters([]);
+      return;
+    }
+
     // Get unique template IDs present in the currently visible logs
     const templateIdsInLogs = [...new Set(userFilteredLogs.map(log => log.template_id).filter(Boolean))];
 
@@ -430,9 +437,15 @@ export default function CoachDashboard() {
 
     setDynamicSessionTypes({ labels, colors });
     setSessionTypeFilters(Object.keys(labels));
-  }, [userFilteredLogs, assignedTemplates]);
+  }, [userFilteredLogs, assignedTemplates, isAdmin, isCoach]);
 
   useEffect(() => {
+    if ((isAdmin || isCoach) && userFilteredLogs.length === 0) {
+      setAthleteMetrics({ labels: {}, colors: {}, idToCanonical: {} });
+      setSelectedMetrics([]);
+      return;
+    }
+
     // Trouver les templates réellement utilisés dans les logs filtrés
     const templateIdsInLogs = [...new Set(userFilteredLogs.map(log => log.template_id).filter(Boolean))];
     const relevantTemplates = templateIdsInLogs.length > 0
@@ -533,7 +546,7 @@ export default function CoachDashboard() {
 
     setAthleteMetrics({ labels, colors, idToCanonical });
     setSelectedMetrics(metricKeys.slice(0, Math.min(4, metricKeys.length)));
-  }, [userFilteredLogs, assignedTemplates, customColors]);
+  }, [userFilteredLogs, assignedTemplates, customColors, isAdmin, isCoach]);
 
   const dateRange = { start: parseISO(startDate), end: parseISO(endDate) };
 
@@ -720,6 +733,14 @@ export default function CoachDashboard() {
                 Données Objectives
               </Button>
             </Link>
+            )}
+            {isCoach && (
+              <Link to={createPageUrl('DataExport')}>
+                <Button variant="outline" className="gap-2 border-indigo-300 text-indigo-600 hover:bg-indigo-50">
+                  <Download className="w-4 h-4" />
+                  Export données
+                </Button>
+              </Link>
             )}
             {isUsingDemoData && (
               <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
