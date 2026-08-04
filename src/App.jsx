@@ -19,6 +19,7 @@ import CoachDailyResponsesPage from './pages/CoachDailyResponses';
 import OnboardingPage from './pages/Onboarding';
 import PendingApprovalPage from './pages/PendingApproval';
 import LoginPage from './pages/LoginPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 
@@ -32,7 +33,16 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout
 
 // ─── Routeur principal basé sur authState ────────────────────────────────────
 const AppRouter = () => {
-  const { authState } = useAuth();
+  const { authState, isPasswordRecovery } = useAuth();
+
+  // 0. Lien de réinitialisation de mot de passe → formulaire nouveau mot de passe
+  if (isPasswordRecovery) {
+    return (
+      <Routes>
+        <Route path="*" element={<ResetPasswordPage />} />
+      </Routes>
+    );
+  }
 
   // 1. Chargement de la session
   if (authState === 'loading') {

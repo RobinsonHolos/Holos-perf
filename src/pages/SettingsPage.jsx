@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from 'sonner';
 import { User, Mail, Palette, Save, Info, Upload, X, Image, LogOut } from 'lucide-react';
-import PushNotificationSetup from '@/components/PushNotificationSetup';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -335,11 +334,6 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Notifications push - uniquement pour les athlètes */}
-      {user?.user_status === 'athlete' && (
-        <PushNotificationSetup athleteEmail={user.email} />
       )}
 
       {/* Déconnexion */}

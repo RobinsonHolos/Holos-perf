@@ -15,6 +15,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser]           = useState(null);
   const [authState, setAuthState] = useState('loading');
   const [authError, setAuthError] = useState(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const loadProfile = useCallback(async (authUser) => {
     if (!authUser) {
@@ -92,12 +93,17 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return;
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+          return;
+        }
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
           loadProfile(session?.user);
         }
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setAuthState('unauthenticated');
+          setIsPasswordRecovery(false);
         }
       }
     );
@@ -148,6 +154,13 @@ export const AuthProvider = ({ children }) => {
       : { success: true };
   }, []);
 
+  const updatePassword = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { success: false, error: error.message };
+    setIsPasswordRecovery(false);
+    return { success: true };
+  }, []);
+
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -179,6 +192,7 @@ export const AuthProvider = ({ children }) => {
       user,
       authState,
       authError,
+      isPasswordRecovery,
       isAuthenticated:         authState !== 'unauthenticated' && authState !== 'loading',
       isLoadingAuth:           authState === 'loading',
       isLoadingPublicSettings: false,
@@ -192,6 +206,7 @@ export const AuthProvider = ({ children }) => {
       signUp,
       logout,
       resetPassword,
+      updatePassword,
       updateProfile,
       refreshUser,
       navigateToLogin: logout,

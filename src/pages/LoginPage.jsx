@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +42,10 @@ export default function LoginPage() {
       setError('Le mot de passe doit contenir au moins 6 caractères.');
       return;
     }
+    if (password !== confirmPassword) {
+      setError('Les mots de passe ne correspondent pas.');
+      return;
+    }
     setLoading(true);
     const result = await signUp(email, password, {
       full_name: `${firstName.trim()} ${lastName.trim()}`,
@@ -52,6 +57,8 @@ export default function LoginPage() {
     } else {
       setSuccess('Compte créé ! Vérifiez votre email pour confirmer votre inscription, puis connectez-vous.');
       setMode('login');
+      setPassword('');
+      setConfirmPassword('');
     }
     setLoading(false);
   };
@@ -190,6 +197,12 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password-signup">Confirmer le mot de passe *</Label>
+                <Input id="confirm-password-signup" type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••" value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)} required />
               </div>
               <Button type="submit" disabled={loading} className="w-full bg-slate-800 hover:bg-slate-700">
                 {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Création...</> : 'Créer mon compte'}
