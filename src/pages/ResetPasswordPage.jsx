@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function ResetPasswordPage() {
-  const { updatePassword, logout } = useAuth();
+  const { updatePassword } = useAuth();
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,13 +31,15 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     const result = await updatePassword(password);
-    setLoading(false);
 
     if (!result.success) {
+      setLoading(false);
       setError(result.error || 'Une erreur est survenue.');
       return;
     }
     setSuccess(true);
+    // Redirection vers l'accueil : la session de récupération est déjà active.
+    window.location.href = '/';
   };
 
   return (
@@ -53,16 +55,14 @@ export default function ResetPasswordPage() {
           <CardTitle className="text-2xl">Nouveau mot de passe</CardTitle>
           <CardDescription>
             {success
-              ? 'Votre mot de passe a été mis à jour.'
+              ? 'Votre mot de passe a été mis à jour. Redirection...'
               : 'Choisissez un nouveau mot de passe pour votre compte.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {success ? (
-            <div className="space-y-4">
-              <Button className="w-full" onClick={logout}>
-                Se connecter avec le nouveau mot de passe
-              </Button>
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">

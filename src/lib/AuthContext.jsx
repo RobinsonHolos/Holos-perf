@@ -15,7 +15,15 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser]           = useState(null);
   const [authState, setAuthState] = useState('loading');
   const [authError, setAuthError] = useState(null);
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => {
+    // Supabase en flux PKCE redirige avec ?code=...&type=recovery (et non
+    // #access_token=...&type=recovery), auquel cas l'événement 'PASSWORD_RECOVERY'
+    // n'est pas toujours émis : on détecte aussi directement l'URL au chargement.
+    if (typeof window === 'undefined') return false;
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    return search.get('type') === 'recovery' || hash.get('type') === 'recovery';
+  });
 
   const loadProfile = useCallback(async (authUser) => {
     if (!authUser) {
