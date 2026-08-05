@@ -15,7 +15,8 @@ import {
   CalendarDays,
   User,
   PenLine,
-  BarChart2
+  BarChart2,
+  Download
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import CoachCalendar from '../components/calendar/CoachCalendar';
@@ -94,6 +95,13 @@ export default function CoachHomeIndividual() {
       icon: MessageCircle,
       href: createPageUrl('Messages'),
       color: 'from-amber-500 to-amber-600'
+    },
+    {
+      title: 'Export des données',
+      description: 'Télécharger les données d\'entraînement',
+      icon: Download,
+      href: createPageUrl('DataExport'),
+      color: 'from-red-500 to-rose-600'
     },
     {
       title: 'Questionnaires',

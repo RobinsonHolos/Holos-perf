@@ -6,18 +6,26 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Download, FileDown, Calendar, User as UserIcon, ArrowLeft } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Download, FileDown, Calendar, Users, ArrowLeft, Shield, Search, X } from 'lucide-react';
 import { format, parseISO, getWeek, getDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { useAuth } from '@/lib/AuthContext';
 
+const LARGE_EXPORT_THRESHOLD = 3000;
+
 export default function DataExport() {
   // ── Utiliser useAuth() au lieu de recharger l'utilisateur ─────────────────
   const { user, isAdmin, isCoach } = useAuth();
 
-  const [selectedAthlete, setSelectedAthlete] = useState('all');
+  const [scopeTab, setScopeTab] = useState('athletes'); // 'athletes' | 'groups' | 'clubs'
+  const [selectedEmails, setSelectedEmails] = useState([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
+  const [selectedClubIds, setSelectedClubIds] = useState([]);
+  const [athleteSearch, setAthleteSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
@@ -39,6 +47,18 @@ export default function DataExport() {
       return clubs.find(c => (c.coach_emails || []).includes(user.email)) || null;
     },
     enabled: isCoach && !!user?.email,
+  });
+
+  const { data: allGroups = [] } = useQuery({
+    queryKey: ['all-groups-export'],
+    queryFn: () => base44.entities.Group.list(),
+    enabled: isAdmin && !!user,
+  });
+
+  const { data: allClubs = [] } = useQuery({
+    queryKey: ['all-clubs-export'],
+    queryFn: () => base44.entities.Club.list(),
+    enabled: isAdmin && !!user,
   });
 
   const { data: allUsers = [] } = useQuery({
@@ -82,26 +102,96 @@ export default function DataExport() {
     return allResponses;
   })();
 
-  const allAthleteEmails = new Set([
-    ...userFilteredLogs.map(log => log.athlete_email),
-    ...userFilteredResponses.map(resp => resp.athlete_email),
-    ...(isCoach ? [...coachAthleteEmailSet] : []),
-  ]);
+  // ── Liste canonique des joueurs sélectionnables ────────────────────────────
+  // Basée sur les comptes "athlète" (pour ne pas dépendre de la présence de données),
+  // complétée par les emails trouvés dans les séances/questionnaires (comptes historiques).
+  const athletes = (() => {
+    const map = new Map();
+    allUsers.forEach(u => {
+      if (u.user_status === 'athlete' && (!isCoach || coachAthleteEmailSet.has(u.email))) {
+        map.set(u.email, u.full_name || u.email);
+      }
+    });
+    if (isCoach) {
+      coachAthleteEmailSet.forEach(email => {
+        if (!map.has(email)) {
+          const u = allUsers.find(x => x.email === email);
+          map.set(email, u?.full_name || email);
+        }
+      });
+    }
+    userFilteredLogs.forEach(log => {
+      if (!map.has(log.athlete_email)) map.set(log.athlete_email, log.athlete_name || log.athlete_email);
+    });
+    userFilteredResponses.forEach(resp => {
+      if (!map.has(resp.athlete_email)) map.set(resp.athlete_email, resp.athlete_name || resp.athlete_email);
+    });
+    return [...map.entries()]
+      .map(([email, name]) => ({ email, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })();
 
-  const athletes = [...allAthleteEmails].map(email => {
-    const log = userFilteredLogs.find(l => l.athlete_email === email);
-    const response = userFilteredResponses.find(r => r.athlete_email === email);
-    const userRecord = allUsers.find(u => u.email === email);
-    return { email, name: log?.athlete_name || response?.athlete_name || userRecord?.full_name || email };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+  const filteredAthletes = athletes.filter(a =>
+    a.name.toLowerCase().includes(athleteSearch.toLowerCase()) || a.email.toLowerCase().includes(athleteSearch.toLowerCase())
+  );
+
+  const toggleEmail = (email) => {
+    setSelectedEmails(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]);
+  };
+  const toggleGroup = (id) => {
+    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
+  };
+  const toggleClub = (id) => {
+    setSelectedClubIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  };
+
+  const visibleAthleteEmails = filteredAthletes.map(a => a.email);
+  const allVisibleAthletesSelected = visibleAthleteEmails.length > 0 && visibleAthleteEmails.every(e => selectedEmails.includes(e));
+  const toggleSelectAllAthletes = () => {
+    if (allVisibleAthletesSelected) {
+      setSelectedEmails(prev => prev.filter(e => !visibleAthleteEmails.includes(e)));
+    } else {
+      setSelectedEmails(prev => [...new Set([...prev, ...visibleAthleteEmails])]);
+    }
+  };
+
+  const allGroupIds = allGroups.map(g => g.id);
+  const allGroupsSelected = allGroupIds.length > 0 && allGroupIds.every(id => selectedGroupIds.includes(id));
+  const toggleSelectAllGroups = () => setSelectedGroupIds(allGroupsSelected ? [] : allGroupIds);
+
+  const allClubIds = allClubs.map(c => c.id);
+  const allClubsSelected = allClubIds.length > 0 && allClubIds.every(id => selectedClubIds.includes(id));
+  const toggleSelectAllClubs = () => setSelectedClubIds(allClubsSelected ? [] : allClubIds);
+
+  const clearSelection = () => {
+    setSelectedEmails([]);
+    setSelectedGroupIds([]);
+    setSelectedClubIds([]);
+  };
+
+  // Union des joueurs sélectionnés individuellement, via groupe(s) ou via club(s)
+  const effectiveEmailSet = (() => {
+    const set = new Set(selectedEmails);
+    selectedGroupIds.forEach(id => {
+      const g = allGroups.find(x => x.id === id);
+      (g?.athlete_emails || []).forEach(e => set.add(e));
+    });
+    selectedClubIds.forEach(id => {
+      const c = allClubs.find(x => x.id === id);
+      (c?.athlete_emails || []).forEach(e => set.add(e));
+    });
+    return set;
+  })();
+
+  const hasScopeSelection = effectiveEmailSet.size > 0;
 
   const filterData = () => {
     let filteredLogs = [...userFilteredLogs];
     let filteredResponses = [...userFilteredResponses];
 
-    if (selectedAthlete !== 'all') {
-      filteredLogs = filteredLogs.filter(log => log.athlete_email === selectedAthlete);
-      filteredResponses = filteredResponses.filter(resp => resp.athlete_email === selectedAthlete);
+    if (hasScopeSelection) {
+      filteredLogs = filteredLogs.filter(log => effectiveEmailSet.has(log.athlete_email));
+      filteredResponses = filteredResponses.filter(resp => effectiveEmailSet.has(resp.athlete_email));
     }
     if (startDate) {
       filteredLogs = filteredLogs.filter(log => log.training_date >= startDate);
@@ -117,6 +207,15 @@ export default function DataExport() {
       responses: filteredResponses.sort((a, b) => new Date(b.submitted_date) - new Date(a.submitted_date))
     };
   };
+
+  const exportFileLabel = (() => {
+    if (!hasScopeSelection) return 'tous_athletes';
+    if (effectiveEmailSet.size === 1) {
+      const email = [...effectiveEmailSet][0];
+      return (athletes.find(a => a.email === email)?.name || email).replace(/\s+/g, '_');
+    }
+    return `${effectiveEmailSet.size}_joueurs`;
+  })();
 
   const exportToCSV = () => {
     const { logs, responses } = filterData();
@@ -186,10 +285,10 @@ export default function DataExport() {
     const allRows = [...logRows, ...responseRows].sort((a, b) => b[0].split('/').reverse().join('').localeCompare(a[0].split('/').reverse().join('')));
     const csvContent = [headers.join(','), ...allRows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.setAttribute('href', URL.createObjectURL(blob));
-    link.setAttribute('download', `donnees_${selectedAthlete === 'all' ? 'tous_athletes' : athletes.find(a => a.email === selectedAthlete)?.name.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.setAttribute('download', `donnees_${exportFileLabel}_${format(new Date(), 'yyyyMMdd')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -202,7 +301,7 @@ export default function DataExport() {
     const blob = new Blob([JSON.stringify({ training_logs: logs, questionnaire_responses: responses }, null, 2)], { type: 'application/json' });
     const link = document.createElement('a');
     link.setAttribute('href', URL.createObjectURL(blob));
-    link.setAttribute('download', `donnees_${format(new Date(), 'yyyyMMdd')}.json`);
+    link.setAttribute('download', `donnees_${exportFileLabel}_${format(new Date(), 'yyyyMMdd')}.json`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -213,13 +312,14 @@ export default function DataExport() {
 
   const { logs, responses } = filterData();
   const filteredCount = logs.length + responses.length;
+  const isLargeExport = filteredCount > LARGE_EXPORT_THRESHOLD;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
-            <Link to={createPageUrl('AdminHome')}>
+            <Link to={createPageUrl(isAdmin ? 'AdminHome' : 'CoachHome')}>
               <Button variant="outline" className="gap-2"><ArrowLeft className="w-4 h-4" />Accueil</Button>
             </Link>
           </div>
@@ -234,15 +334,156 @@ export default function DataExport() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2"><UserIcon className="w-4 h-4" />Athlète</Label>
-              <Select value={selectedAthlete} onValueChange={setSelectedAthlete}>
-                <SelectTrigger><SelectValue placeholder="Sélectionner un athlète" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les athlètes</SelectItem>
-                  {athletes.map(athlete => <SelectItem key={athlete.email} value={athlete.email}>{athlete.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="flex items-center gap-2"><Users className="w-4 h-4" />Portée de l'export</Label>
+
+              {isAdmin && (
+                <div className="flex gap-2 flex-wrap pb-1">
+                  <Button
+                    type="button"
+                    variant={scopeTab === 'athletes' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setScopeTab('athletes')}
+                    className={scopeTab === 'athletes' ? 'bg-slate-800 hover:bg-slate-700' : ''}
+                  >
+                    Joueurs
+                  </Button>
+                  {allGroups.length > 0 && (
+                    <Button
+                      type="button"
+                      variant={scopeTab === 'groups' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setScopeTab('groups')}
+                      className={scopeTab === 'groups' ? 'bg-slate-800 hover:bg-slate-700' : ''}
+                    >
+                      Groupes
+                    </Button>
+                  )}
+                  {allClubs.length > 0 && (
+                    <Button
+                      type="button"
+                      variant={scopeTab === 'clubs' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setScopeTab('clubs')}
+                      className={scopeTab === 'clubs' ? 'bg-slate-800 hover:bg-slate-700' : ''}
+                    >
+                      Clubs
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Onglet Joueurs (coach et admin) */}
+              {(!isAdmin || scopeTab === 'athletes') && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        placeholder="Rechercher un joueur..."
+                        value={athleteSearch}
+                        onChange={(e) => setAthleteSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllAthletes} disabled={visibleAthleteEmails.length === 0}>
+                      {allVisibleAthletesSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </Button>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-56 overflow-y-auto">
+                    {filteredAthletes.length > 0 ? (
+                      filteredAthletes.map(athlete => (
+                        <div key={athlete.email} className="flex items-center gap-2 py-1">
+                          <Checkbox
+                            id={`athlete-${athlete.email}`}
+                            checked={selectedEmails.includes(athlete.email)}
+                            onCheckedChange={() => toggleEmail(athlete.email)}
+                          />
+                          <Label htmlFor={`athlete-${athlete.email}`} className="text-sm cursor-pointer font-normal">
+                            {athlete.name}
+                          </Label>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-slate-400 py-1">Aucun joueur trouvé</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Onglet Groupes (admin) */}
+              {isAdmin && scopeTab === 'groups' && (
+                <div className="space-y-2">
+                  <div className="flex justify-end">
+                    <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllGroups} disabled={allGroups.length === 0}>
+                      {allGroupsSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </Button>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-56 overflow-y-auto">
+                    {allGroups.map(group => (
+                      <div key={group.id} className="flex items-center gap-2 py-1">
+                        <Checkbox
+                          id={`group-${group.id}`}
+                          checked={selectedGroupIds.includes(group.id)}
+                          onCheckedChange={() => toggleGroup(group.id)}
+                        />
+                        <Label htmlFor={`group-${group.id}`} className="text-sm cursor-pointer font-normal">
+                          {group.name} ({(group.athlete_emails || []).length} joueur{(group.athlete_emails || []).length !== 1 ? 's' : ''})
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Onglet Clubs (admin) */}
+              {isAdmin && scopeTab === 'clubs' && (
+                <div className="space-y-2">
+                  <div className="flex justify-end">
+                    <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllClubs} disabled={allClubs.length === 0}>
+                      {allClubsSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </Button>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-56 overflow-y-auto">
+                    {allClubs.map(club => (
+                      <div key={club.id} className="flex items-center gap-2 py-1">
+                        <Checkbox
+                          id={`club-${club.id}`}
+                          checked={selectedClubIds.includes(club.id)}
+                          onCheckedChange={() => toggleClub(club.id)}
+                        />
+                        <Label htmlFor={`club-${club.id}`} className="text-sm cursor-pointer font-normal flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5 text-slate-400" />
+                          {club.name} ({(club.athlete_emails || []).length} joueur{(club.athlete_emails || []).length !== 1 ? 's' : ''})
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Récapitulatif de la sélection */}
+              <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-slate-600">
+                    {hasScopeSelection
+                      ? `${effectiveEmailSet.size} joueur${effectiveEmailSet.size !== 1 ? 's' : ''} sélectionné${effectiveEmailSet.size !== 1 ? 's' : ''}`
+                      : 'Tous les joueurs accessibles'}
+                  </Badge>
+                  {selectedGroupIds.length > 0 && (
+                    <Badge variant="outline" className="text-slate-500">{selectedGroupIds.length} groupe{selectedGroupIds.length !== 1 ? 's' : ''}</Badge>
+                  )}
+                  {selectedClubIds.length > 0 && (
+                    <Badge variant="outline" className="text-slate-500">{selectedClubIds.length} club{selectedClubIds.length !== 1 ? 's' : ''}</Badge>
+                  )}
+                </div>
+                {hasScopeSelection && (
+                  <Button type="button" variant="ghost" size="sm" onClick={clearSelection} className="gap-1 text-slate-500 h-7 px-2">
+                    <X className="w-3.5 h-3.5" />Réinitialiser
+                  </Button>
+                )}
+              </div>
             </div>
+
             <div className="space-y-2">
               <Label className="flex items-center gap-2"><Calendar className="w-4 h-4" />Période</Label>
               <div className="grid grid-cols-2 gap-4">
@@ -269,6 +510,11 @@ export default function DataExport() {
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
               <p className="text-sm text-blue-800"><span className="font-semibold">{filteredCount}</span> entrée{filteredCount !== 1 ? 's' : ''} à exporter</p>
             </div>
+            {isLargeExport && (
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
+                <p className="text-sm text-amber-800">Export volumineux ({filteredCount} entrées) : le téléchargement peut prendre quelques instants. Vous pouvez restreindre la période ou la sélection pour l'accélérer.</p>
+              </div>
+            )}
             <Button onClick={exportFormat === 'csv' ? exportToCSV : exportToJSON} className="w-full bg-slate-800 hover:bg-slate-700 gap-2" size="lg" disabled={filteredCount === 0}>
               <Download className="w-5 h-5" />
               Télécharger ({exportFormat.toUpperCase()})

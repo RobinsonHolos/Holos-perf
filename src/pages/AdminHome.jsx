@@ -50,9 +50,10 @@ export default function AdminHome() {
   const [selectionMode, setSelectionMode] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [calendarSelectionMode, setCalendarSelectionMode] = useState('my');
+  const [calendarSelectionMode, setCalendarSelectionMode] = useState('all');
   const [calendarSelectedAthletes, setCalendarSelectedAthletes] = useState([]);
-  const [calendarSelectedGroup, setCalendarSelectedGroup] = useState(null);
+  const [calendarSelectedGroups, setCalendarSelectedGroups] = useState([]);
+  const [calendarSelectedClubs, setCalendarSelectedClubs] = useState([]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -91,6 +92,28 @@ export default function AdminHome() {
     queryFn: () => base44.entities.Group.list(),
     enabled: isAdmin && !!user
   });
+
+  // Charger tous les clubs
+  const { data: allClubs = [] } = useQuery({
+    queryKey: ['all-clubs-calendar'],
+    queryFn: () => base44.entities.Club.list(),
+    enabled: isAdmin && !!user
+  });
+
+  // Emails (athlètes + coachs) à utiliser pour filtrer le calendrier selon le mode choisi
+  const calendarSelectedAthleteEmails = (() => {
+    if (calendarSelectionMode === 'athletes') return calendarSelectedAthletes;
+    if (calendarSelectionMode === 'groups') {
+      return [...new Set(calendarSelectedGroups.flatMap(id => allGroups.find(g => g.id === id)?.athlete_emails || []))];
+    }
+    if (calendarSelectionMode === 'clubs') {
+      return [...new Set(calendarSelectedClubs.flatMap(id => {
+        const club = allClubs.find(c => c.id === id);
+        return [...(club?.athlete_emails || []), ...(club?.coach_emails || [])];
+      }))];
+    }
+    return [];
+  })();
 
   const handleGenerateStats = async () => {
     setStatsLoading(true);
@@ -692,45 +715,137 @@ export default function AdminHome() {
                   {/* Mode de sélection */}
                   <div className="flex items-center gap-4 flex-wrap">
                     <Label className="text-sm font-medium text-slate-700">Calendrier à afficher :</Label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button
-                        variant={calendarSelectionMode === 'my' ? 'default' : 'outline'}
+                        variant={calendarSelectionMode === 'all' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => {
-                          setCalendarSelectionMode('my');
-                          setCalendarSelectedAthletes([]);
-                          setCalendarSelectedGroup(null);
-                        }}
-                        className={calendarSelectionMode === 'my' ? 'bg-purple-600' : ''}
+                        onClick={() => setCalendarSelectionMode('all')}
+                        className={calendarSelectionMode === 'all' ? 'bg-purple-600' : ''}
                       >
-                        Mon calendrier
+                        Toutes les séances
                       </Button>
+                      {allClubs.length > 0 && (
+                        <Button
+                          variant={calendarSelectionMode === 'clubs' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCalendarSelectionMode('clubs')}
+                          className={calendarSelectionMode === 'clubs' ? 'bg-purple-600' : ''}
+                        >
+                          Clubs
+                        </Button>
+                      )}
+                      {allGroups.length > 0 && (
+                        <Button
+                          variant={calendarSelectionMode === 'groups' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCalendarSelectionMode('groups')}
+                          className={calendarSelectionMode === 'groups' ? 'bg-purple-600' : ''}
+                        >
+                          Groupes
+                        </Button>
+                      )}
                       <Button
                         variant={calendarSelectionMode === 'athletes' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => {
-                          setCalendarSelectionMode('athletes');
-                          setCalendarSelectedGroup(null);
-                        }}
+                        onClick={() => setCalendarSelectionMode('athletes')}
                         className={calendarSelectionMode === 'athletes' ? 'bg-purple-600' : ''}
                       >
                         Athlètes
                       </Button>
-                      {allGroups.length > 0 && (
-                        <Button
-                          variant={calendarSelectionMode === 'group' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => {
-                            setCalendarSelectionMode('group');
-                            setCalendarSelectedAthletes([]);
-                          }}
-                          className={calendarSelectionMode === 'group' ? 'bg-purple-600' : ''}
-                        >
-                          Groupe
-                        </Button>
-                      )}
+                      <Button
+                        variant={calendarSelectionMode === 'my' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCalendarSelectionMode('my')}
+                        className={calendarSelectionMode === 'my' ? 'bg-purple-600' : ''}
+                      >
+                        Mon calendrier
+                      </Button>
                     </div>
                   </div>
+
+                  {/* Sélection de clubs */}
+                  {calendarSelectionMode === 'clubs' && (
+                    <div className="flex items-start gap-4">
+                      <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-3">
+                        Clubs :
+                      </Label>
+                      <div className="flex-1 space-y-2">
+                        <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-48 overflow-y-auto">
+                          {allClubs.length > 0 ? (
+                            allClubs.map((club) => (
+                              <div key={club.id} className="flex items-center gap-2 py-1">
+                                <Checkbox
+                                  id={`cal-club-${club.id}`}
+                                  checked={calendarSelectedClubs.includes(club.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setCalendarSelectedClubs([...calendarSelectedClubs, club.id]);
+                                    } else {
+                                      setCalendarSelectedClubs(calendarSelectedClubs.filter(id => id !== club.id));
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor={`cal-club-${club.id}`} className="text-sm cursor-pointer">
+                                  {club.name} ({(club.athlete_emails || []).length} athlètes)
+                                </Label>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-amber-700">
+                              Aucun club disponible
+                            </div>
+                          )}
+                        </div>
+                        {calendarSelectedClubs.length > 0 && (
+                          <div className="text-sm text-purple-700 font-medium">
+                            ✓ {calendarSelectedClubs.length} club(s) sélectionné(s)
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sélection de groupes */}
+                  {calendarSelectionMode === 'groups' && (
+                    <div className="flex items-start gap-4">
+                      <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-3">
+                        Groupes :
+                      </Label>
+                      <div className="flex-1 space-y-2">
+                        <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-48 overflow-y-auto">
+                          {allGroups.length > 0 ? (
+                            allGroups.map((group) => (
+                              <div key={group.id} className="flex items-center gap-2 py-1">
+                                <Checkbox
+                                  id={`cal-group-${group.id}`}
+                                  checked={calendarSelectedGroups.includes(group.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setCalendarSelectedGroups([...calendarSelectedGroups, group.id]);
+                                    } else {
+                                      setCalendarSelectedGroups(calendarSelectedGroups.filter(id => id !== group.id));
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor={`cal-group-${group.id}`} className="text-sm cursor-pointer">
+                                  {group.name} ({(group.athlete_emails || []).length} athlètes)
+                                </Label>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-amber-700">
+                              Aucun groupe disponible
+                            </div>
+                          )}
+                        </div>
+                        {calendarSelectedGroups.length > 0 && (
+                          <div className="text-sm text-purple-700 font-medium">
+                            ✓ {calendarSelectedGroups.length} groupe(s) sélectionné(s)
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Sélection d'athlètes */}
                   {calendarSelectionMode === 'athletes' && (
@@ -773,53 +888,14 @@ export default function AdminHome() {
                       </div>
                     </div>
                   )}
-
-                  {/* Sélection de groupe */}
-                  {calendarSelectionMode === 'group' && allGroups.length > 0 && (
-                    <div className="flex items-center gap-4">
-                      <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                        Groupe :
-                      </Label>
-                      <div className="flex-1 max-w-md">
-                        <Select 
-                          value={calendarSelectedGroup || 'none'} 
-                          onValueChange={(v) => setCalendarSelectedGroup(v === 'none' ? null : v)}
-                        >
-                          <SelectTrigger className="h-11 bg-white border-purple-300 shadow-sm">
-                            <SelectValue placeholder="Sélectionner un groupe..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">
-                              <span className="font-semibold">Sélectionner un groupe...</span>
-                            </SelectItem>
-                            {allGroups.map((group) => (
-                              <SelectItem key={group.id} value={group.id}>
-                                {group.name} ({group.athlete_emails?.length || 0} athlètes)
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {calendarSelectedGroup && (
-                          <div className="text-sm text-purple-700 font-medium mt-2">
-                            ✓ Groupe sélectionné
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
           )}
-          <EventCalendar 
-            userEmail={user.email} 
-            selectedAthleteEmails={
-              calendarSelectionMode === 'my' ? [] :
-              calendarSelectionMode === 'athletes' ? calendarSelectedAthletes :
-              calendarSelectionMode === 'group' && calendarSelectedGroup ? 
-                (allGroups.find(g => g.id === calendarSelectedGroup)?.athlete_emails || []) :
-              []
-            }
+          <EventCalendar
+            userEmail={user.email}
+            showAllEvents={calendarSelectionMode === 'all'}
+            selectedAthleteEmails={calendarSelectionMode === 'my' ? [] : calendarSelectedAthleteEmails}
           />
         </div>
 

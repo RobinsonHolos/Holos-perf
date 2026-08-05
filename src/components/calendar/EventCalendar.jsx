@@ -237,7 +237,7 @@ function DatePickerButton({ value, onChange }) {
   );
 }
 
-export default function EventCalendar({ userEmail, selectedAthleteEmails = [] }) {
+export default function EventCalendar({ userEmail, selectedAthleteEmails = [], showAllEvents = false }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('week');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -274,8 +274,11 @@ export default function EventCalendar({ userEmail, selectedAthleteEmails = [] })
   const queryClient = useQueryClient();
 
   const { data: events = [] } = useQuery({
-    queryKey: ['events', userEmail, selectedAthleteEmails],
+    queryKey: ['events', userEmail, selectedAthleteEmails, showAllEvents],
     queryFn: async () => {
+      if (showAllEvents) {
+        return base44.entities.Event.list();
+      }
       if (selectedAthleteEmails.length > 0) {
         const allEvents = await base44.entities.Event.list();
         return allEvents.filter(event =>
