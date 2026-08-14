@@ -121,7 +121,7 @@ export default function AthleteDataChart({ data, selectedMetrics, title, metricC
                   strokeOpacity={1}
                   dot={{ r: 5, fill: metricColor, strokeWidth: 2, stroke: '#fff' }}
                   activeDot={{ r: 7, strokeWidth: 3, stroke: '#fff', fill: metricColor }}
-                  connectNulls
+                  connectNulls={false}
                 />
               );
             })}

@@ -468,7 +468,7 @@ export default function CoachDashboard() {
     const groupedByLabel = new Map();
     relevantTemplates.forEach(template => {
       (template.questions || []).filter(q => q.type === 'scale' || q.type === 'number').forEach(question => {
-        const norm = normalizeLabel(question.athleteLabel || question.label);
+        const norm = normalizeLabel(question.label || question.athleteLabel);
         if (!groupedByLabel.has(norm)) {
           groupedByLabel.set(norm, { representative: question, ids: [question.id] });
         } else {
@@ -517,8 +517,8 @@ export default function CoachDashboard() {
       const canonicalKey = ids[0];
       ids.forEach(id => { idToCanonical[id] = canonicalKey; });
 
-      const label = normalizeLabel(question.athleteLabel || question.label);
-      labels[canonicalKey] = question.athleteLabel || question.label;
+      const label = normalizeLabel(question.label || question.athleteLabel);
+      labels[canonicalKey] = question.label || question.athleteLabel;
 
       let color;
       if (label.includes('fatigue')) color = '#ef4444';

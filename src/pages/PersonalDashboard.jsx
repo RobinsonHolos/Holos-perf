@@ -134,7 +134,7 @@ export default function PersonalDashboard() {
       }
 
       questions.filter(q => q.type === 'scale' || q.type === 'number').forEach((question, index) => {
-        metricLabelMap[question.id] = question.athleteLabel || question.label;
+        metricLabelMap[question.id] = question.label || question.athleteLabel;
         metricColorMap[question.id] = defaultColors[index % defaultColors.length];
         metricKeys.push(question.id);
       });

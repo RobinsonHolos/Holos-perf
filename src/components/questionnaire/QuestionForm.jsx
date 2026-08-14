@@ -34,7 +34,7 @@ export default function QuestionForm({
       </div>
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label>Libellé interne</Label>
+          <Label>Libellé interne (dashboard)</Label>
           <Input value={newQuestion.label} onChange={(e) => setNewQuestion({ ...newQuestion, label: e.target.value })} placeholder="Ex: Comment vous sentez-vous ?" />
         </div>
         <div className="space-y-2">

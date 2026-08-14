@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { supabase as base44 } from '@/api/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar as CalendarIcon, Plus, Clock, Trash2, ChevronLeft, ChevronRight, Users, ChevronUp, ChevronDown, Edit, X } from 'lucide-react';
@@ -23,8 +22,9 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPageUrl } from '@/utils';
+import AthleteAssignmentPicker from './AthleteAssignmentPicker';
 
-export default function CoachCalendar({ coachEmail, athletes }) {
+export default function CoachCalendar({ coachEmail, athletes, isAdmin = false, filterType = 'all', filterValue = '', allGroups = [], allClubs = [], coachClub = null, coachOwnGroups = [] }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('week'); // 'month', 'week', 'day'
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -61,12 +61,41 @@ export default function CoachCalendar({ coachEmail, athletes }) {
   const queryClient = useQueryClient();
 
   const { data: events = [] } = useQuery({
-    queryKey: ['coach-events', coachEmail],
+    queryKey: ['coach-events', isAdmin ? 'admin-all' : coachEmail],
     queryFn: async () => {
+      if (isAdmin) {
+        return base44.entities.Event.list();
+      }
       const allEvents = await base44.entities.Event.filter({ user_email: coachEmail });
       return allEvents;
     }
   });
+
+  // Pour l'admin : filtrage par club / groupe / athlète sélectionné en haut de page
+  const filteredEvents = useMemo(() => {
+    if (!isAdmin || filterType === 'all' || !filterValue) return events;
+    if (filterType === 'athlete') {
+      return events.filter(e => e.user_email === filterValue || e.assigned_athletes?.includes(filterValue));
+    }
+    if (filterType === 'group') {
+      const group = allGroups.find(g => g.id === filterValue);
+      if (!group) return events;
+      return events.filter(e =>
+        group.athlete_emails?.some(email => e.user_email === email || e.assigned_athletes?.includes(email)) ||
+        e.user_email === group.coach_email
+      );
+    }
+    if (filterType === 'club') {
+      const club = allClubs.find(c => c.id === filterValue);
+      if (!club) return events;
+      const clubEmails = [...(club.coach_emails || []), ...(club.athlete_emails || [])];
+      return events.filter(e =>
+        clubEmails.includes(e.user_email) ||
+        e.assigned_athletes?.some(email => clubEmails.includes(email))
+      );
+    }
+    return events;
+  }, [events, isAdmin, filterType, filterValue, allGroups, allClubs]);
 
   const createSessionMutation = useMutation({
     mutationFn: (sessionData) => base44.entities.Event.create(sessionData),
@@ -209,35 +238,6 @@ export default function CoachCalendar({ coachEmail, athletes }) {
     });
   };
 
-  const toggleAthleteAssignment = (athleteEmail) => {
-    if (newSession.assigned_athletes.includes(athleteEmail)) {
-      setNewSession({
-        ...newSession,
-        assigned_athletes: newSession.assigned_athletes.filter(e => e !== athleteEmail)
-      });
-    } else {
-      setNewSession({
-        ...newSession,
-        assigned_athletes: [...newSession.assigned_athletes, athleteEmail]
-      });
-    }
-  };
-
-  const toggleEditAthleteAssignment = (athleteEmail) => {
-    const current = editingEvent.assigned_athletes || [];
-    if (current.includes(athleteEmail)) {
-      setEditingEvent({
-        ...editingEvent,
-        assigned_athletes: current.filter(e => e !== athleteEmail)
-      });
-    } else {
-      setEditingEvent({
-        ...editingEvent,
-        assigned_athletes: [...current, athleteEmail]
-      });
-    }
-  };
-
   const handleEventClick = (event, e) => {
     e.stopPropagation();
     // Rediriger vers la page de détails de la séance
@@ -336,7 +336,7 @@ export default function CoachCalendar({ coachEmail, athletes }) {
   };
 
   const viewDates = getViewDates();
-  const eventsForSelectedDate = events.filter(event => 
+  const eventsForSelectedDate = filteredEvents.filter(event =>
     isSameDay(parseISO(event.event_date), selectedDate)
   ).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
@@ -428,7 +428,7 @@ export default function CoachCalendar({ coachEmail, athletes }) {
                 </div>
               ))}
               {viewDates.map((date, idx) => {
-                const dayEvents = events.filter(event => 
+                const dayEvents = filteredEvents.filter(event =>
                   isSameDay(parseISO(event.event_date), date)
                 );
                 const isCurrentMonth = date.getMonth() === currentDate.getMonth();
@@ -524,7 +524,7 @@ export default function CoachCalendar({ coachEmail, athletes }) {
                 )}
               </div>
               {viewDates.map((date, idx) => {
-                const dayEvents = events.filter(event => 
+                const dayEvents = filteredEvents.filter(event =>
                   isSameDay(parseISO(event.event_date), date)
                 );
                 const isSelected = isSameDay(date, selectedDate);
@@ -864,32 +864,18 @@ export default function CoachCalendar({ coachEmail, athletes }) {
                 />
               </div>
 
-              <div>
-                <Label className="mb-3 block">Athlètes assignés</Label>
-                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
-                  {athletes.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-4">
-                      Aucun athlète dans votre groupe
-                    </p>
-                  ) : (
-                    athletes.map((athlete) => (
-                      <div key={athlete.email} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded">
-                        <Checkbox
-                          id={`edit-athlete-${athlete.email}`}
-                          checked={(editingEvent.assigned_athletes || []).includes(athlete.email)}
-                          onCheckedChange={() => toggleEditAthleteAssignment(athlete.email)}
-                        />
-                        <Label
-                          htmlFor={`edit-athlete-${athlete.email}`}
-                          className="flex-1 cursor-pointer"
-                        >
-                          {athlete.name}
-                        </Label>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <AthleteAssignmentPicker
+                athletes={athletes}
+                selected={editingEvent.assigned_athletes || []}
+                onChange={(emails) => setEditingEvent({ ...editingEvent, assigned_athletes: emails })}
+                isAdmin={isAdmin}
+                coachClub={coachClub}
+                allGroups={allGroups}
+                allClubs={allClubs}
+                coachOwnGroups={coachOwnGroups}
+                idPrefix="edit-athlete"
+                emptyLabel="Aucun athlète dans votre groupe"
+              />
 
               <div className="flex gap-2 justify-end pt-4 border-t">
                 <Button 
@@ -1081,32 +1067,18 @@ export default function CoachCalendar({ coachEmail, athletes }) {
               )}
             </div>
 
-            <div>
-              <Label className="mb-3 block">Athlètes assignés</Label>
-              <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
-                {athletes.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">
-                    Aucun athlète dans votre groupe
-                  </p>
-                ) : (
-                  athletes.map((athlete) => (
-                    <div key={athlete.email} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded">
-                      <Checkbox
-                        id={`athlete-${athlete.email}`}
-                        checked={newSession.assigned_athletes.includes(athlete.email)}
-                        onCheckedChange={() => toggleAthleteAssignment(athlete.email)}
-                      />
-                      <Label
-                        htmlFor={`athlete-${athlete.email}`}
-                        className="flex-1 cursor-pointer"
-                      >
-                        {athlete.name}
-                      </Label>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <AthleteAssignmentPicker
+              athletes={athletes}
+              selected={newSession.assigned_athletes}
+              onChange={(emails) => setNewSession({ ...newSession, assigned_athletes: emails })}
+              isAdmin={isAdmin}
+              coachClub={coachClub}
+              allGroups={allGroups}
+              allClubs={allClubs}
+              coachOwnGroups={coachOwnGroups}
+              idPrefix="athlete"
+              emptyLabel="Aucun athlète dans votre groupe"
+            />
 
             <div className="flex gap-2 justify-end pt-4">
               <Button variant="outline" onClick={() => setShowCreateDialog(false)}>

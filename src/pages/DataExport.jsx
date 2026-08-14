@@ -230,7 +230,7 @@ export default function DataExport() {
         template.questions.forEach(q => {
           if (q.id) {
             allQuestionIds.add(q.id);
-            questionIdToLabel[q.id] = q.athleteLabel || q.label || q.id;
+            questionIdToLabel[q.id] = q.label || q.athleteLabel || q.id;
             questionMap[q.id] = q;
           }
         });

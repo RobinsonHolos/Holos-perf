@@ -239,7 +239,7 @@ export default function QuestionBank() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="q-label">Libellé interne (admin) *</Label>
+                  <Label htmlFor="q-label">Libellé interne (admin, dashboard) *</Label>
                   <Input
                     id="q-label"
                     value={newQuestion.label}
