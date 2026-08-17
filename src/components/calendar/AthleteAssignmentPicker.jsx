@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from 'lucide-react';
 
-// Sélecteur d'athlètes avec recherche + sélection en masse par groupe/club.
-// - Admin : peut ajouter un groupe entier ou un club entier (parmi tous ceux de l'appli).
-// - Coach lié à un club : pas de sélecteur "groupe", juste la liste (déjà limitée aux athlètes du club) + "Tout sélectionner".
-// - Coach indépendant : peut ajouter un de ses propres groupes.
+// Sélecteur d'athlètes avec recherche + filtre par club + filtre par groupe.
+// - Admin : peut filtrer la liste par club (parmi tous ceux de l'appli) et/ou par groupe ;
+//   "Tout sélectionner" ne sélectionne que les athlètes actuellement affichés (filtrés).
+// - Coach lié à un club : pas de sélecteur "club", juste la liste (déjà limitée aux athlètes du club) + filtre groupe + "Tout sélectionner".
+// - Coach indépendant : peut filtrer par un de ses propres groupes.
 export default function AthleteAssignmentPicker({
   athletes = [],
   selected = [],
@@ -23,16 +24,29 @@ export default function AthleteAssignmentPicker({
   emptyLabel = 'Aucun athlète disponible',
 }) {
   const [search, setSearch] = useState('');
-  const [groupPick, setGroupPick] = useState('');
-  const [clubPick, setClubPick] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+  const [clubFilter, setClubFilter] = useState('');
+
+  const groupOptions = isAdmin ? allGroups : coachOwnGroups;
 
   const filteredAthletes = useMemo(() => {
+    let list = athletes;
+    if (clubFilter) {
+      const club = allClubs.find(c => c.id === clubFilter);
+      const clubEmails = new Set(club?.athlete_emails || []);
+      list = list.filter(a => clubEmails.has(a.email));
+    }
+    if (groupFilter) {
+      const group = groupOptions.find(g => g.id === groupFilter);
+      const groupEmails = new Set(group?.athlete_emails || []);
+      list = list.filter(a => groupEmails.has(a.email));
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return athletes;
-    return athletes.filter(a =>
+    if (!q) return list;
+    return list.filter(a =>
       (a.name || '').toLowerCase().includes(q) || (a.email || '').toLowerCase().includes(q)
     );
-  }, [athletes, search]);
+  }, [athletes, search, clubFilter, groupFilter, allClubs, groupOptions]);
 
   const allFilteredSelected = filteredAthletes.length > 0 && filteredAthletes.every(a => selected.includes(a.email));
 
@@ -50,14 +64,6 @@ export default function AthleteAssignmentPicker({
     }
   };
 
-  const addEmails = (emails) => {
-    const validEmails = (emails || []).filter(e => athletes.some(a => a.email === e));
-    if (validEmails.length === 0) return;
-    const merged = new Set([...selected, ...validEmails]);
-    onChange(Array.from(merged));
-  };
-
-  const groupOptions = isAdmin ? allGroups : coachOwnGroups;
   const showGroupSelector = isAdmin ? groupOptions.length > 0 : (!coachClub && groupOptions.length > 0);
   const showClubSelector = isAdmin && allClubs.length > 0;
 
@@ -86,30 +92,24 @@ export default function AthleteAssignmentPicker({
         </Button>
         {showGroupSelector && (
           <Select
-            value={groupPick}
-            onValueChange={(groupId) => {
-              const group = groupOptions.find(g => g.id === groupId);
-              if (group) addEmails(group.athlete_emails);
-              setGroupPick('');
-            }}
+            value={groupFilter || '__all__'}
+            onValueChange={(groupId) => setGroupFilter(groupId === '__all__' ? '' : groupId)}
           >
-            <SelectTrigger className="w-48"><SelectValue placeholder="+ Groupe entier" /></SelectTrigger>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Filtrer par groupe" /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="__all__">Tous les groupes</SelectItem>
               {groupOptions.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
         {showClubSelector && (
           <Select
-            value={clubPick}
-            onValueChange={(clubId) => {
-              const club = allClubs.find(c => c.id === clubId);
-              if (club) addEmails(club.athlete_emails);
-              setClubPick('');
-            }}
+            value={clubFilter || '__all__'}
+            onValueChange={(clubId) => setClubFilter(clubId === '__all__' ? '' : clubId)}
           >
-            <SelectTrigger className="w-48"><SelectValue placeholder="+ Club entier" /></SelectTrigger>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Filtrer par club" /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="__all__">Tous les clubs</SelectItem>
               {allClubs.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>

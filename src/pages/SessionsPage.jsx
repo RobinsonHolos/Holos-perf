@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import SessionDetailModal from '../components/sessions/SessionDetailModal';
 import { supabase as base44 } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -6,12 +6,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, ChevronLeft, Users, Filter } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronDown, ChevronUp, Users, Filter } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
+
+const PAGE_SIZE = 5;
 
 const SESSION_CATEGORY_LABELS = {
   seance_terrain: 'Terrain',
@@ -71,6 +73,9 @@ export default function SessionsPage() {
   const [filterValue, setFilterValue] = useState('');
 
   const isAdmin = user?.user_status === 'admin';
+
+  const [visibleFutureCount, setVisibleFutureCount] = useState(PAGE_SIZE);
+  const [visiblePastCount, setVisiblePastCount] = useState(PAGE_SIZE);
 
   const { data: allUsers = [] } = useQuery({
     queryKey: ['admin-users'],
@@ -161,6 +166,14 @@ export default function SessionsPage() {
   const pastSessions = filteredEvents.filter(e => e.event_date < today).sort((a, b) => b.event_date.localeCompare(a.event_date));
   const futureSessions = filteredEvents.filter(e => e.event_date >= today).sort((a, b) => a.event_date.localeCompare(b.event_date));
 
+  useEffect(() => {
+    setVisibleFutureCount(PAGE_SIZE);
+    setVisiblePastCount(PAGE_SIZE);
+  }, [filterType, filterValue]);
+
+  const visibleFutureSessions = futureSessions.slice(0, visibleFutureCount);
+  const visiblePastSessions = pastSessions.slice(0, visiblePastCount);
+
   const backUrl = user?.user_status === 'athlete' ? createPageUrl('AthleteHome') :
                   user?.user_status === 'admin' ? createPageUrl('AdminHome') :
                   createPageUrl('CoachHome');
@@ -235,9 +248,33 @@ export default function SessionsPage() {
             {futureSessions.length === 0 ? (
               <p className="text-slate-400 text-sm py-4 text-center">Aucune séance à venir</p>
             ) : (
-              <div className="space-y-3">
-                {futureSessions.map(event => <SessionCard key={event.id} event={event} onClick={() => setSelectedEvent(event)} />)}
-              </div>
+              <>
+                <div className="space-y-3">
+                  {visibleFutureSessions.map(event => <SessionCard key={event.id} event={event} onClick={() => setSelectedEvent(event)} />)}
+                </div>
+                {(visibleFutureCount < futureSessions.length || visibleFutureCount > PAGE_SIZE) && (
+                  <div className="flex justify-center mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-slate-600"
+                      onClick={() => {
+                        if (visibleFutureCount < futureSessions.length) {
+                          setVisibleFutureCount(c => Math.min(c + PAGE_SIZE, futureSessions.length));
+                        } else {
+                          setVisibleFutureCount(PAGE_SIZE);
+                        }
+                      }}
+                    >
+                      {visibleFutureCount < futureSessions.length ? (
+                        <>Voir plus ({futureSessions.length - visibleFutureCount} restante{futureSessions.length - visibleFutureCount > 1 ? 's' : ''}) <ChevronDown className="w-4 h-4 ml-1" /></>
+                      ) : (
+                        <>Voir moins <ChevronUp className="w-4 h-4 ml-1" /></>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </section>
 
@@ -249,9 +286,33 @@ export default function SessionsPage() {
             {pastSessions.length === 0 ? (
               <p className="text-slate-400 text-sm py-4 text-center">Aucune séance passée</p>
             ) : (
-              <div className="space-y-3">
-                {pastSessions.map(event => <SessionCard key={event.id} event={event} onClick={() => setSelectedEvent(event)} />)}
-              </div>
+              <>
+                <div className="space-y-3">
+                  {visiblePastSessions.map(event => <SessionCard key={event.id} event={event} onClick={() => setSelectedEvent(event)} />)}
+                </div>
+                {(visiblePastCount < pastSessions.length || visiblePastCount > PAGE_SIZE) && (
+                  <div className="flex justify-center mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-slate-600"
+                      onClick={() => {
+                        if (visiblePastCount < pastSessions.length) {
+                          setVisiblePastCount(c => Math.min(c + PAGE_SIZE, pastSessions.length));
+                        } else {
+                          setVisiblePastCount(PAGE_SIZE);
+                        }
+                      }}
+                    >
+                      {visiblePastCount < pastSessions.length ? (
+                        <>Voir plus ({pastSessions.length - visiblePastCount} restante{pastSessions.length - visiblePastCount > 1 ? 's' : ''}) <ChevronDown className="w-4 h-4 ml-1" /></>
+                      ) : (
+                        <>Voir moins <ChevronUp className="w-4 h-4 ml-1" /></>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </>

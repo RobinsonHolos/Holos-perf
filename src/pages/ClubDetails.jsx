@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Upload, Link as LinkIcon, Copy, Check, Trash2, UserPlus, X, ClipboardList, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Upload, Link as LinkIcon, Copy, Check, Trash2, UserPlus, X, ClipboardList, ShieldCheck, Eye, EyeOff, ListChecks } from 'lucide-react';
 import ClubTeamsSection from '@/components/ClubTeamsSection';
 import ColorPicker from '@/components/ui/ColorPicker';
 import { Switch } from '@/components/ui/switch';
@@ -277,8 +277,16 @@ export default function ClubDetails() {
               <p className="text-slate-500 text-sm">{coaches.length} coach(s) · {athletes.length} athlète(s)</p>
             </div>
           </div>
-          {currentUser?.user_status === 'admin' && (
-            <Button variant="outline" size="sm" className="ml-auto text-red-600 border-red-200 hover:bg-red-50 gap-2" onClick={handleDeleteClub}>
+          {(isCoach || isAdmin) && (
+            <Link to={`${createPageUrl('ClubResponses')}?id=${clubId}`} className="ml-auto">
+              <Button variant="outline" size="sm" className="gap-2">
+                <ListChecks className="w-4 h-4" />
+                Voir les réponses
+              </Button>
+            </Link>
+          )}
+          {isAdmin && (
+            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 gap-2" onClick={handleDeleteClub}>
               <Trash2 className="w-4 h-4" />
               Supprimer
             </Button>

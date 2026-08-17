@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import SettingsPage from './pages/SettingsPage';
 import ClubManagementPage from './pages/ClubManagement';
 import ClubDetailsPage from './pages/ClubDetails';
+import ClubResponsesPage from './pages/ClubResponses';
 import JoinClubPage from './pages/JoinClub';
 import SessionsPage from './pages/SessionsPage';
 import StravaCallbackPage from './pages/StravaCallback';
@@ -97,6 +98,7 @@ const AppRouter = () => {
       <Route path="/Sessions"           element={<LayoutWrapper currentPageName="Sessions"><SessionsPage /></LayoutWrapper>} />
       <Route path="/ClubManagement"     element={<LayoutWrapper currentPageName="ClubManagement"><ClubManagementPage /></LayoutWrapper>} />
       <Route path="/ClubDetails"        element={<LayoutWrapper currentPageName="ClubDetails"><ClubDetailsPage /></LayoutWrapper>} />
+      <Route path="/ClubResponses"      element={<LayoutWrapper currentPageName="ClubResponses"><ClubResponsesPage /></LayoutWrapper>} />
       <Route path="/ObjectiveData"      element={<LayoutWrapper currentPageName="ObjectiveData"><ObjectiveDataPage /></LayoutWrapper>} />
       <Route path="/CoachPermissions"   element={<LayoutWrapper currentPageName="CoachPermissions"><CoachPermissionsPage /></LayoutWrapper>} />
       <Route path="/CoachHomeIndividual" element={<LayoutWrapper currentPageName="CoachHomeIndividual"><CoachHomeIndividualPage /></LayoutWrapper>} />
