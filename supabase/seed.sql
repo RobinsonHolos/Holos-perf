@@ -71,12 +71,19 @@ insert into public.groups (id, name, coach_email, athlete_emails) values
   ('91000000-0000-0000-0000-000000000001', 'Groupe A', 'coach@holos.test',
    '{alice@holos.test,bob@holos.test,chloe@holos.test}');
 
+-- ─── 5b. Questionnaire assigné (lié à la séance) ──────────────────────────────
+insert into public.questionnaire_templates (id, name, description, questions, is_active, assigned_athletes) values
+  ('f1000000-0000-0000-0000-000000000001', 'Ressenti du jour', 'Questionnaire post-séance',
+   '[{"id":"rpe","label":"RPE","type":"scale"},{"id":"fatigue","label":"Fatigue","type":"scale"}]'::jsonb,
+   true, '{alice@holos.test,bob@holos.test,chloe@holos.test}');
+
 -- ─── 6. Séance d'entraînement du jour ─────────────────────────────────────────
 -- end_time calé à ~75 min avant maintenant (heure de Paris) pour tomber dans la
 -- fenêtre du rappel post-séance (60–90 min après la fin).
 insert into public.events (
   id, title, description, user_email, event_date, start_time, end_time,
-  duration_minutes, is_training_session, assigned_athletes, session_category
+  duration_minutes, is_training_session, assigned_athletes, session_category,
+  questionnaire_template_id
 ) values (
   'e1000000-0000-0000-0000-000000000001',
   'Séance terrain du jour', 'Travail technique + opposition',
@@ -84,7 +91,8 @@ insert into public.events (
   to_char((now() at time zone 'Europe/Paris') - interval '75 minutes', 'HH24:MI'),
   90, true,
   '{alice@holos.test,bob@holos.test,chloe@holos.test}',
-  'seance_terrain'
+  'seance_terrain',
+  'f1000000-0000-0000-0000-000000000001'
 );
 
 -- ─── 7. Réponse déjà soumise par Alice (pour tester le "skip si déjà répondu") ─
