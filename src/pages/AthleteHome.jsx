@@ -26,6 +26,8 @@ import CustomQuestionnaireForm from '../components/questionnaire/CustomQuestionn
 import AthleteDataChart from '../components/dashboard/AthleteDataChart';
 import EventCalendar from '../components/calendar/EventCalendar';
 import PushNotificationPrompt from '../components/PushNotificationPrompt';
+import QuestionnaireReminderBanner from '../components/questionnaire/QuestionnaireReminderBanner';
+import { getPendingQuestionnaires } from '@/lib/pendingQuestionnaires';
 import { format, parseISO, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
@@ -304,6 +306,30 @@ export default function AthleteHome() {
   }
 
   // Vue Home
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const pendingQuestionnaires = getPendingQuestionnaires({
+    todayEvents,
+    assignedQuestionnaires,
+    todayResponses: questionnaireResponses.filter((r) => r.submitted_date?.startsWith(todayStr)),
+    allResponses: allQuestionnaireResponses,
+    now: new Date(),
+  });
+
+  const openPendingQuestionnaire = () => {
+    const first = pendingQuestionnaires[0];
+    if (!first) return;
+    const existingResponse = first.eventId
+      ? allQuestionnaireResponses.find((r) => r.event_id === first.eventId)
+      : questionnaireResponses.find(
+          (r) => r.template_id === first.templateId && !r.event_id && r.submitted_date?.startsWith(todayStr),
+        );
+    setSelectedQuestionnaireId(first.templateId);
+    setExistingResponseId(existingResponse?.id || null);
+    setSelectedEventId(first.eventId);
+    setSelectedResponseDate(null);
+    setView('questionnaire');
+  };
+
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
@@ -325,6 +351,11 @@ export default function AthleteHome() {
             Bienvenue, {athleteFirstName || user.full_name?.split(' ')[0]} 👋
           </p>
         </div>
+
+        <QuestionnaireReminderBanner
+          count={pendingQuestionnaires.length}
+          onFill={openPendingQuestionnaire}
+        />
 
         {/* Section Questionnaires */}
         {(() => {
