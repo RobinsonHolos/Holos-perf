@@ -6,18 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import AthleteDataChart from '../components/dashboard/AthleteDataChart';
 import HistogramChart from '../components/dashboard/HistogramChart';
+import ZoomableChartCard from '../components/dashboard/ZoomableChartCard';
 import MetricSelector from '../components/dashboard/MetricSelector';
 import StatCard from '../components/dashboard/StatCard';
 import SummaryStatsTable from '../components/dashboard/SummaryStatsTable';
 import {
   Users, Activity, TrendingUp, Calendar, Filter,
-  ChevronDown, ChevronUp, RefreshCw, ArrowLeft, Search, Zap, Download
+  RefreshCw, ArrowLeft, Search, Zap, Download
 } from 'lucide-react';
 import { format, subDays, isAfter, parseISO, startOfWeek, startOfMonth } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -105,7 +105,6 @@ export default function CoachDashboard() {
   const [selectedMetrics, setSelectedMetrics] = useState([]);
   const [groupBy, setGroupBy] = useState('day');
   const [sessionTypeFilters, setSessionTypeFilters] = useState(['entrainement', 'competition', 'effort_type', 'off', 'inconnu']);
-  const [sortConfig, setSortConfig] = useState({ key: 'training_date', direction: 'desc' });
   const [demoData] = useState(() => generateDemoData());
   const [athleteMetrics, setAthleteMetrics] = useState({ labels: {}, colors: {}, idToCanonical: {} });
   const [athleteSearchQuery, setAthleteSearchQuery] = useState('');
@@ -286,6 +285,7 @@ export default function CoachDashboard() {
     maitrise_technique: log.maitrise_technique,
     maitrise_tactique: log.maitrise_tactique,
     epanouissement: log.epanouissement,
+    commentaire: log.commentaire,
   })), [rawTrainingLogs]);
 
   const hasRealAthletes = isCoach
@@ -623,17 +623,40 @@ export default function CoachDashboard() {
 
   const logsWithLabels = processedLogs;
 
-  const sortedLogs = [...filteredLogs].sort((a, b) => {
-    let aVal = a[sortConfig.key];
-    let bVal = b[sortConfig.key];
-    if (sortConfig.key === 'training_date') {
-      aVal = new Date(aVal);
-      bVal = new Date(bVal);
-    }
-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
+  // Remarques : commentaire libre du questionnaire d'entraînement classique,
+  // et réponses aux questions de type texte libre des questionnaires personnalisés.
+  const remarksList = useMemo(() => {
+    const templateById = {};
+    assignedTemplates.forEach(t => { templateById[t.id] = t; });
+
+    const remarks = [];
+    filteredLogs.forEach(log => {
+      if (log.template_id) {
+        const template = templateById[log.template_id];
+        const textQuestions = (template?.questions || []).filter(q => q.type === 'text' || q.type === 'textarea');
+        textQuestions.forEach(q => {
+          const value = log[q.id];
+          if (value && String(value).trim()) {
+            remarks.push({
+              id: `${log.id}-${q.id}`,
+              date: log.training_date,
+              athlete_name: log.athlete_name,
+              text: String(value).trim(),
+            });
+          }
+        });
+      } else if (log.commentaire && String(log.commentaire).trim()) {
+        remarks.push({
+          id: `${log.id}-commentaire`,
+          date: log.training_date,
+          athlete_name: log.athlete_name,
+          text: String(log.commentaire).trim(),
+        });
+      }
+    });
+
+    return remarks.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [filteredLogs, assignedTemplates]);
 
   const groupedChartData = (() => {
     const currentMetricLabels = Object.keys(athleteMetrics.labels);
@@ -690,13 +713,6 @@ export default function CoachDashboard() {
   const avgSecondMetric = filteredLogs.length > 0 && secondMetricKey
     ? Math.round(filteredLogs.reduce((sum, l) => sum + (l[secondMetricKey] || 0), 0) / filteredLogs.length)
     : '-';
-
-  const toggleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
 
   const toggleSessionTypeFilter = (type) => {
     setSessionTypeFilters(prev => 
@@ -956,17 +972,22 @@ export default function CoachDashboard() {
         {/* Line Chart */}
         {groupedChartData.length > 0 && selectedMetrics.length > 0 && (
           <div className="mb-6">
-            <AthleteDataChart
-              data={groupedChartData}
-              selectedMetrics={selectedMetrics}
-              metricConfig={Object.keys(athleteMetrics.labels).reduce((acc, key) => {
-                acc[key] = { name: athleteMetrics.labels[key], color: athleteMetrics.colors[key] };
-                return acc;
-              }, {})}
-              title={`Évolution ${isAdmin && athletes.length > 1 ? '(tous les athlètes)' : ''}`}
-              startDate={startDate}
-              endDate={endDate}
-            />
+            <ZoomableChartCard title={`Évolution ${isAdmin && athletes.length > 1 ? '(tous les athlètes)' : ''}`} zoomedHeight={550}>
+              {(isZoomed, zoomHeight) => (
+                <AthleteDataChart
+                  data={groupedChartData}
+                  selectedMetrics={selectedMetrics}
+                  metricConfig={Object.keys(athleteMetrics.labels).reduce((acc, key) => {
+                    acc[key] = { name: athleteMetrics.labels[key], color: athleteMetrics.colors[key] };
+                    return acc;
+                  }, {})}
+                  title={`Évolution ${isAdmin && athletes.length > 1 ? '(tous les athlètes)' : ''}`}
+                  startDate={startDate}
+                  endDate={endDate}
+                  height={isZoomed ? zoomHeight : undefined}
+                />
+              )}
+            </ZoomableChartCard>
           </div>
         )}
 
@@ -974,89 +995,50 @@ export default function CoachDashboard() {
         {logsWithLabels.length > 0 && Object.keys(athleteMetrics.labels).length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {Object.entries(athleteMetrics.labels).map(([key, label]) => (
-              <HistogramChart
-                key={key}
-                data={logsWithLabels}
-                dataKey={key}
-                title={label}
-                color={athleteMetrics.colors[key]}
-                startDate={startDate}
-                endDate={endDate}
-              />
+              <ZoomableChartCard key={key} title={label} zoomedHeight={450}>
+                {(isZoomed, zoomHeight) => (
+                  <HistogramChart
+                    data={logsWithLabels}
+                    dataKey={key}
+                    title={label}
+                    color={athleteMetrics.colors[key]}
+                    startDate={startDate}
+                    endDate={endDate}
+                    height={isZoomed ? zoomHeight : undefined}
+                  />
+                )}
+              </ZoomableChartCard>
             ))}
           </div>
         )}
 
-        {/* Data Table */}
+        {/* Remarques */}
         <Card className="shadow-sm border-0">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Détail des séances</CardTitle>
-              <Badge variant="secondary">{sortedLogs.length} entrées</Badge>
+              <CardTitle className="text-lg">Remarques</CardTitle>
+              <Badge variant="secondary">{remarksList.length} remarque{remarksList.length > 1 ? 's' : ''}</Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50">
-                    <TableHead 
-                      className="cursor-pointer hover:bg-slate-100"
-                      onClick={() => toggleSort('training_date')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Date
-                        {sortConfig.key === 'training_date' && (
-                          sortConfig.direction === 'desc' ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-slate-100"
-                      onClick={() => toggleSort('athlete_name')}
-                    >
-                      Athlète
-                    </TableHead>
-                    <TableHead>Type</TableHead>
-                    {selectedMetrics.slice(0, 5).map(metricKey => (
-                      <TableHead 
-                        key={metricKey}
-                        className="text-center cursor-pointer hover:bg-slate-100"
-                        onClick={() => toggleSort(metricKey)}
-                      >
-                        {athleteMetrics.labels[metricKey] || metricKey}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedLogs.slice(0, 10).map((log) => (
-                    <TableRow key={log.id} className="hover:bg-slate-50">
-                      <TableCell className="font-medium">
-                        {format(parseISO(log.training_date), 'dd/MM/yyyy', { locale: fr })}
-                      </TableCell>
-                      <TableCell>{log.athlete_name}</TableCell>
-                      <TableCell>
-                        <Badge className={dynamicSessionTypes.colors[log.session_type] || 'bg-slate-100 text-slate-600'}>
-                          {dynamicSessionTypes.labels[log.session_type] || log.session_type}
-                        </Badge>
-                      </TableCell>
-                      {selectedMetrics.slice(0, 5).map(metricKey => (
-                        <TableCell key={metricKey} className="text-center">
-                          <span className={`font-medium ${log[metricKey] >= 70 ? 'text-amber-600' : ''}`}>
-                            {log[metricKey] ?? '-'}
-                          </span>
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            {sortedLogs.length > 10 && (
-              <p className="text-center text-sm text-slate-500 mt-4">
-                Affichage des 10 premières entrées sur {sortedLogs.length}
+            {remarksList.length === 0 ? (
+              <p className="text-center text-sm text-slate-500 py-6">
+                Aucune remarque sur la période sélectionnée.
               </p>
+            ) : (
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                {remarksList.map((remark) => (
+                  <div key={remark.id} className="p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <span className="font-medium text-slate-800 text-sm">{remark.athlete_name}</span>
+                      <span className="text-xs text-slate-400 whitespace-nowrap">
+                        {format(parseISO(remark.date), 'dd/MM/yyyy', { locale: fr })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600 whitespace-pre-wrap">{remark.text}</p>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

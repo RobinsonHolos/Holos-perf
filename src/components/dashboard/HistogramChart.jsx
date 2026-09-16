@@ -18,7 +18,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function HistogramChart({ data, dataKey, title, color, startDate, endDate }) {
+export default function HistogramChart({ data, dataKey, title, color, startDate, endDate, height = 220 }) {
   const calculateEMA = (values, period) => {
     const multiplier = 2 / (period + 1);
     let ema = null;
@@ -101,7 +101,7 @@ export default function HistogramChart({ data, dataKey, title, color, startDate,
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis 

@@ -23,7 +23,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function AthleteDataChart({ data, selectedMetrics, title, metricConfig, startDate, endDate }) {
+export default function AthleteDataChart({ data, selectedMetrics, title, metricConfig, startDate, endDate, height = 350 }) {
   const start = startDate ? new Date(startDate) : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const end = endDate ? new Date(endDate) : new Date();
   const allDays = eachDayOfInterval({ start, end });
@@ -77,7 +77,7 @@ export default function AthleteDataChart({ data, selectedMetrics, title, metricC
         </CardHeader>
       )}
       <CardContent className={title ? "pt-0" : "pt-6"}>
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={height}>
           <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis 
