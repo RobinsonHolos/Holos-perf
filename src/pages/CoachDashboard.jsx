@@ -98,7 +98,7 @@ export default function CoachDashboard() {
   const { user } = useAuth();
   const [selectedAthleteEmails, setSelectedAthleteEmails] = useState([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
-  const [selectedTeamIds, setSelectedTeamIds] = useState([]);
+  const [selectedClubIds, setSelectedClubIds] = useState([]);
   const [startDate, setStartDate] = useState(() => getDefaultDates().start);
   const [endDate, setEndDate] = useState(() => getDefaultDates().end);
   const [selectedMetrics, setSelectedMetrics] = useState([]);
@@ -316,30 +316,11 @@ export default function CoachDashboard() {
 
   const isIndividualView = localStorage.getItem('coachView') === 'individual';
 
-  const { data: allTeams = [] } = useQuery({
-    queryKey: ['all-teams-coach-dashboard', user?.email, isAdmin, coachClub?.id],
-    queryFn: async () => {
-      if (isAdmin) return await base44.entities.Team.list();
-      if (isCoach && coachClub?.id) return await base44.entities.Team.filter({ club_id: coachClub.id });
-      return [];
-    },
-    enabled: !!user && (isAdmin || (isCoach && !!coachClub?.id)),
-  });
-
   const { data: allClubs = [] } = useQuery({
     queryKey: ['all-clubs-coach-dashboard'],
     queryFn: async () => await base44.entities.Club.list(),
     enabled: !!user && isAdmin,
   });
-
-  const clubNameById = useMemo(() => {
-    const map = {};
-    allClubs.forEach(c => { map[c.id] = c.name; });
-    return map;
-  }, [allClubs]);
-
-  // Les équipes ne sont pertinentes que si le coach voit son club entier (pas en vue "individuelle")
-  const visibleTeams = isCoach && (!coachClub || isIndividualView) ? [] : allTeams;
 
   const selectableAthletes = useMemo(() => {
     if (isAdmin) {
@@ -361,16 +342,16 @@ export default function CoachDashboard() {
     return [];
   }, [isAdmin, isCoach, allUsers, coachClub, isIndividualView, coachGroup]);
 
-  // Pool d'athlètes affiché dans la liste à cocher : réduit aux groupes/équipes
+  // Pool d'athlètes affiché dans la liste à cocher : réduit aux groupes/clubs
   // sélectionnés s'il y en a, sinon le pool complet (club + groupe du coach, ou tous pour l'admin).
   const athletePool = useMemo(() => {
-    if (selectedGroupIds.length === 0 && selectedTeamIds.length === 0) return selectableAthletes;
+    if (selectedGroupIds.length === 0 && selectedClubIds.length === 0) return selectableAthletes;
     const narrowedEmails = new Set([
       ...selectedGroupIds.flatMap(id => allGroups.find(g => g.id === id)?.athlete_emails || []),
-      ...selectedTeamIds.flatMap(id => visibleTeams.find(t => t.id === id)?.athlete_emails || []),
+      ...selectedClubIds.flatMap(id => allClubs.find(c => c.id === id)?.athlete_emails || []),
     ]);
     return selectableAthletes.filter(a => narrowedEmails.has(a.email));
-  }, [selectableAthletes, selectedGroupIds, selectedTeamIds, allGroups, visibleTeams]);
+  }, [selectableAthletes, selectedGroupIds, selectedClubIds, allGroups, allClubs]);
 
   const toggleGroupFilter = (groupId) => {
     const group = allGroups.find(g => g.id === groupId);
@@ -382,11 +363,11 @@ export default function CoachDashboard() {
       : [...new Set([...prev, ...emails])]);
   };
 
-  const toggleTeamFilter = (teamId) => {
-    const team = visibleTeams.find(t => t.id === teamId);
-    const emails = team?.athlete_emails || [];
-    const isSelected = selectedTeamIds.includes(teamId);
-    setSelectedTeamIds(prev => isSelected ? prev.filter(id => id !== teamId) : [...prev, teamId]);
+  const toggleClubFilter = (clubId) => {
+    const club = allClubs.find(c => c.id === clubId);
+    const emails = club?.athlete_emails || [];
+    const isSelected = selectedClubIds.includes(clubId);
+    setSelectedClubIds(prev => isSelected ? prev.filter(id => id !== clubId) : [...prev, clubId]);
     setSelectedAthleteEmails(prev => isSelected
       ? prev.filter(e => !emails.includes(e))
       : [...new Set([...prev, ...emails])]);
@@ -394,7 +375,7 @@ export default function CoachDashboard() {
 
   const clearAthleteSelection = () => {
     setSelectedGroupIds([]);
-    setSelectedTeamIds([]);
+    setSelectedClubIds([]);
     setSelectedAthleteEmails([]);
   };
 
@@ -836,7 +817,7 @@ export default function CoachDashboard() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex flex-col gap-4">
-                {(allGroups.length > 0 || visibleTeams.length > 0) && (
+                {(allGroups.length > 0 || allClubs.length > 0) && (
                   <div className="flex flex-col gap-3">
                     {allGroups.length > 0 && (
                       <div className="flex items-start gap-4">
@@ -858,19 +839,19 @@ export default function CoachDashboard() {
                       </div>
                     )}
 
-                    {visibleTeams.length > 0 && (
+                    {allClubs.length > 0 && (
                       <div className="flex items-start gap-4">
-                        <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-1">Équipes :</Label>
+                        <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-1">Clubs :</Label>
                         <div className="flex-1 flex flex-wrap gap-x-4 gap-y-2">
-                          {visibleTeams.map(team => (
-                            <div key={team.id} className="flex items-center gap-1.5">
+                          {allClubs.map(club => (
+                            <div key={club.id} className="flex items-center gap-1.5">
                               <Checkbox
-                                id={`team-filter-${team.id}`}
-                                checked={selectedTeamIds.includes(team.id)}
-                                onCheckedChange={() => toggleTeamFilter(team.id)}
+                                id={`club-filter-${club.id}`}
+                                checked={selectedClubIds.includes(club.id)}
+                                onCheckedChange={() => toggleClubFilter(club.id)}
                               />
-                              <Label htmlFor={`team-filter-${team.id}`} className="text-sm cursor-pointer">
-                                {team.name}{isAdmin && clubNameById[team.club_id] ? ` · ${clubNameById[team.club_id]}` : ''} ({team.athlete_emails?.length || 0})
+                              <Label htmlFor={`club-filter-${club.id}`} className="text-sm cursor-pointer">
+                                {club.name} ({club.athlete_emails?.length || 0})
                               </Label>
                             </div>
                           ))}
@@ -924,7 +905,7 @@ export default function CoachDashboard() {
                           ✓ {selectedAthleteEmails.length} athlète(s) sélectionné(s){selectedAthleteEmails.length > 1 ? ' - Affichage des médianes' : ''}
                         </div>
                       ) : <span />}
-                      {(selectedGroupIds.length > 0 || selectedTeamIds.length > 0 || selectedAthleteEmails.length > 0) && (
+                      {(selectedGroupIds.length > 0 || selectedClubIds.length > 0 || selectedAthleteEmails.length > 0) && (
                         <Button variant="ghost" size="sm" onClick={clearAthleteSelection} className="text-slate-500 h-7 px-2">
                           Réinitialiser
                         </Button>
