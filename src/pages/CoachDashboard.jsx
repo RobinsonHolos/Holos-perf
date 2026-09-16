@@ -3,7 +3,6 @@ import { supabase as base44 } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -98,8 +97,8 @@ const getDefaultDates = () => {
 export default function CoachDashboard() {
   const { user } = useAuth();
   const [selectedAthleteEmails, setSelectedAthleteEmails] = useState([]);
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
-  const [selectionMode, setSelectionMode] = useState('all');
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
+  const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [startDate, setStartDate] = useState(() => getDefaultDates().start);
   const [endDate, setEndDate] = useState(() => getDefaultDates().end);
   const [selectedMetrics, setSelectedMetrics] = useState([]);
@@ -317,6 +316,31 @@ export default function CoachDashboard() {
 
   const isIndividualView = localStorage.getItem('coachView') === 'individual';
 
+  const { data: allTeams = [] } = useQuery({
+    queryKey: ['all-teams-coach-dashboard', user?.email, isAdmin, coachClub?.id],
+    queryFn: async () => {
+      if (isAdmin) return await base44.entities.Team.list();
+      if (isCoach && coachClub?.id) return await base44.entities.Team.filter({ club_id: coachClub.id });
+      return [];
+    },
+    enabled: !!user && (isAdmin || (isCoach && !!coachClub?.id)),
+  });
+
+  const { data: allClubs = [] } = useQuery({
+    queryKey: ['all-clubs-coach-dashboard'],
+    queryFn: async () => await base44.entities.Club.list(),
+    enabled: !!user && isAdmin,
+  });
+
+  const clubNameById = useMemo(() => {
+    const map = {};
+    allClubs.forEach(c => { map[c.id] = c.name; });
+    return map;
+  }, [allClubs]);
+
+  // Les équipes ne sont pertinentes que si le coach voit son club entier (pas en vue "individuelle")
+  const visibleTeams = isCoach && (!coachClub || isIndividualView) ? [] : allTeams;
+
   const selectableAthletes = useMemo(() => {
     if (isAdmin) {
       return allUsers
@@ -337,6 +361,43 @@ export default function CoachDashboard() {
     return [];
   }, [isAdmin, isCoach, allUsers, coachClub, isIndividualView, coachGroup]);
 
+  // Pool d'athlètes affiché dans la liste à cocher : réduit aux groupes/équipes
+  // sélectionnés s'il y en a, sinon le pool complet (club + groupe du coach, ou tous pour l'admin).
+  const athletePool = useMemo(() => {
+    if (selectedGroupIds.length === 0 && selectedTeamIds.length === 0) return selectableAthletes;
+    const narrowedEmails = new Set([
+      ...selectedGroupIds.flatMap(id => allGroups.find(g => g.id === id)?.athlete_emails || []),
+      ...selectedTeamIds.flatMap(id => visibleTeams.find(t => t.id === id)?.athlete_emails || []),
+    ]);
+    return selectableAthletes.filter(a => narrowedEmails.has(a.email));
+  }, [selectableAthletes, selectedGroupIds, selectedTeamIds, allGroups, visibleTeams]);
+
+  const toggleGroupFilter = (groupId) => {
+    const group = allGroups.find(g => g.id === groupId);
+    const emails = group?.athlete_emails || [];
+    const isSelected = selectedGroupIds.includes(groupId);
+    setSelectedGroupIds(prev => isSelected ? prev.filter(id => id !== groupId) : [...prev, groupId]);
+    setSelectedAthleteEmails(prev => isSelected
+      ? prev.filter(e => !emails.includes(e))
+      : [...new Set([...prev, ...emails])]);
+  };
+
+  const toggleTeamFilter = (teamId) => {
+    const team = visibleTeams.find(t => t.id === teamId);
+    const emails = team?.athlete_emails || [];
+    const isSelected = selectedTeamIds.includes(teamId);
+    setSelectedTeamIds(prev => isSelected ? prev.filter(id => id !== teamId) : [...prev, teamId]);
+    setSelectedAthleteEmails(prev => isSelected
+      ? prev.filter(e => !emails.includes(e))
+      : [...new Set([...prev, ...emails])]);
+  };
+
+  const clearAthleteSelection = () => {
+    setSelectedGroupIds([]);
+    setSelectedTeamIds([]);
+    setSelectedAthleteEmails([]);
+  };
+
   const userFilteredLogs = useMemo(() => {
     let logs = allLogs;
 
@@ -350,19 +411,14 @@ export default function CoachDashboard() {
     }
 
     if (isAdmin || isCoach) {
-      if (selectionMode === 'athletes' && selectedAthleteEmails.length > 0) {
-        logs = logs.filter(log => selectedAthleteEmails.includes(log.athlete_email));
-      } else if (selectionMode === 'group' && selectedGroupId) {
-        const group = allGroups.find(g => g.id === selectedGroupId);
-        logs = group ? logs.filter(log => group.athlete_emails.includes(log.athlete_email)) : [];
-      } else {
-        // Aucune sélection précise (mode "Tous", ou "Athlètes"/"Groupe" sans choix fait) : rien à afficher
-        logs = [];
-      }
+      // Aucune sélection précise : rien à afficher tant que l'utilisateur n'a rien choisi
+      logs = selectedAthleteEmails.length > 0
+        ? logs.filter(log => selectedAthleteEmails.includes(log.athlete_email))
+        : [];
     }
 
     return logs;
-  }, [allLogs, isAdmin, isCoach, selectableAthletes, user?.email, selectionMode, selectedAthleteEmails, selectedGroupId, allGroups]);
+  }, [allLogs, isAdmin, isCoach, selectableAthletes, user?.email, selectedAthleteEmails]);
 
   const athletesFromLogs = [...new Map(userFilteredLogs.map(log => [log.athlete_email, { 
     email: log.athlete_email, 
@@ -572,7 +628,7 @@ export default function CoachDashboard() {
   };
 
   const processedLogs = (() => {
-    if (selectionMode === 'all' || (selectionMode === 'athletes' && selectedAthleteEmails.length <= 1)) {
+    if (selectedAthleteEmails.length <= 1) {
       return filteredLogs.map(log => ({
         ...remapLogMetrics(log),
         dateLabel: format(parseISO(log.training_date), 'dd/MM', { locale: fr })
@@ -588,7 +644,7 @@ export default function CoachDashboard() {
           training_date: log.training_date,
           session_type: log.session_type,
           dateLabel: format(parseISO(log.training_date), 'dd/MM', { locale: fr }),
-          athlete_name: selectionMode === 'group' ? 'Groupe (médiane)' : 'Sélection (médiane)',
+          athlete_name: 'Sélection (médiane)',
           values: {}
         };
       }
@@ -780,116 +836,102 @@ export default function CoachDashboard() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <Label className="text-sm font-medium text-slate-700">Mode de sélection :</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={selectionMode === 'all' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => { setSelectionMode('all'); setSelectedAthleteEmails([]); setSelectedGroupId(null); }}
-                      className={selectionMode === 'all' ? 'bg-slate-800' : ''}
-                    >
-                      Tous
-                    </Button>
-                    <Button
-                      variant={selectionMode === 'athletes' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => { setSelectionMode('athletes'); setSelectedGroupId(null); }}
-                      className={selectionMode === 'athletes' ? 'bg-slate-800' : ''}
-                    >
-                      Athlètes
-                    </Button>
+                {(allGroups.length > 0 || visibleTeams.length > 0) && (
+                  <div className="flex flex-col gap-3">
                     {allGroups.length > 0 && (
-                      <Button
-                        variant={selectionMode === 'group' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => { setSelectionMode('group'); setSelectedAthleteEmails([]); }}
-                        className={selectionMode === 'group' ? 'bg-slate-800' : ''}
-                      >
-                        Groupe
-                      </Button>
+                      <div className="flex items-start gap-4">
+                        <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-1">Groupes :</Label>
+                        <div className="flex-1 flex flex-wrap gap-x-4 gap-y-2">
+                          {allGroups.map(group => (
+                            <div key={group.id} className="flex items-center gap-1.5">
+                              <Checkbox
+                                id={`group-filter-${group.id}`}
+                                checked={selectedGroupIds.includes(group.id)}
+                                onCheckedChange={() => toggleGroupFilter(group.id)}
+                              />
+                              <Label htmlFor={`group-filter-${group.id}`} className="text-sm cursor-pointer">
+                                {group.name} ({group.athlete_emails?.length || 0})
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {visibleTeams.length > 0 && (
+                      <div className="flex items-start gap-4">
+                        <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-1">Équipes :</Label>
+                        <div className="flex-1 flex flex-wrap gap-x-4 gap-y-2">
+                          {visibleTeams.map(team => (
+                            <div key={team.id} className="flex items-center gap-1.5">
+                              <Checkbox
+                                id={`team-filter-${team.id}`}
+                                checked={selectedTeamIds.includes(team.id)}
+                                onCheckedChange={() => toggleTeamFilter(team.id)}
+                              />
+                              <Label htmlFor={`team-filter-${team.id}`} className="text-sm cursor-pointer">
+                                {team.name}{isAdmin && clubNameById[team.club_id] ? ` · ${clubNameById[team.club_id]}` : ''} ({team.athlete_emails?.length || 0})
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
 
-                {selectionMode === 'athletes' && (
-                  <div className="flex items-start gap-4">
-                    <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-3">Athlètes :</Label>
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Search className="w-4 h-4 text-slate-400" />
-                        <Input
-                          placeholder="Rechercher un athlète..."
-                          value={athleteSearchQuery}
-                          onChange={(e) => setAthleteSearchQuery(e.target.value)}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-48 overflow-y-auto">
-                        {selectableAthletes.length > 0 ? (
-                          selectableAthletes
-                            .filter(a => !athleteSearchQuery || a.name.toLowerCase().includes(athleteSearchQuery.toLowerCase()) || a.email.toLowerCase().includes(athleteSearchQuery.toLowerCase()))
-                            .map((athlete) => (
-                              <div key={athlete.email} className="flex items-center gap-2 py-1">
-                                <Checkbox
-                                  id={`athlete-${athlete.email}`}
-                                  checked={selectedAthleteEmails.includes(athlete.email)}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      setSelectedAthleteEmails([...selectedAthleteEmails, athlete.email]);
-                                    } else {
-                                      setSelectedAthleteEmails(selectedAthleteEmails.filter(e => e !== athlete.email));
-                                    }
-                                  }}
-                                />
-                                <Label htmlFor={`athlete-${athlete.email}`} className="text-sm cursor-pointer">
-                                  {athlete.name}
-                                </Label>
-                              </div>
-                            ))
-                        ) : (
-                          <div className="text-sm text-amber-700">Aucun athlète disponible</div>
-                        )}
-                      </div>
-                      {selectedAthleteEmails.length > 0 && (
+                <div className="flex items-start gap-4">
+                  <Label className="text-sm font-medium text-slate-700 whitespace-nowrap mt-3">Athlètes :</Label>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Search className="w-4 h-4 text-slate-400" />
+                      <Input
+                        placeholder="Rechercher un athlète..."
+                        value={athleteSearchQuery}
+                        onChange={(e) => setAthleteSearchQuery(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="border border-slate-200 rounded-lg p-3 bg-white max-h-48 overflow-y-auto">
+                      {athletePool.length > 0 ? (
+                        athletePool
+                          .filter(a => !athleteSearchQuery || a.name.toLowerCase().includes(athleteSearchQuery.toLowerCase()) || a.email.toLowerCase().includes(athleteSearchQuery.toLowerCase()))
+                          .map((athlete) => (
+                            <div key={athlete.email} className="flex items-center gap-2 py-1">
+                              <Checkbox
+                                id={`athlete-${athlete.email}`}
+                                checked={selectedAthleteEmails.includes(athlete.email)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedAthleteEmails([...selectedAthleteEmails, athlete.email]);
+                                  } else {
+                                    setSelectedAthleteEmails(selectedAthleteEmails.filter(e => e !== athlete.email));
+                                  }
+                                }}
+                              />
+                              <Label htmlFor={`athlete-${athlete.email}`} className="text-sm cursor-pointer">
+                                {athlete.name}
+                              </Label>
+                            </div>
+                          ))
+                      ) : (
+                        <div className="text-sm text-amber-700">Aucun athlète disponible</div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      {selectedAthleteEmails.length > 0 ? (
                         <div className="text-sm text-indigo-700 font-medium">
-                          ✓ {selectedAthleteEmails.length} athlète(s) sélectionné(s) - Affichage des médianes
+                          ✓ {selectedAthleteEmails.length} athlète(s) sélectionné(s){selectedAthleteEmails.length > 1 ? ' - Affichage des médianes' : ''}
                         </div>
+                      ) : <span />}
+                      {(selectedGroupIds.length > 0 || selectedTeamIds.length > 0 || selectedAthleteEmails.length > 0) && (
+                        <Button variant="ghost" size="sm" onClick={clearAthleteSelection} className="text-slate-500 h-7 px-2">
+                          Réinitialiser
+                        </Button>
                       )}
                     </div>
                   </div>
-                )}
-
-                {selectionMode === 'group' && allGroups.length > 0 && (
-                  <div className="flex items-center gap-4">
-                    <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Groupe :</Label>
-                    <div className="flex-1 max-w-md">
-                      <Select 
-                        value={selectedGroupId || 'none'} 
-                        onValueChange={(v) => setSelectedGroupId(v === 'none' ? null : v)}
-                      >
-                        <SelectTrigger className="h-11 bg-white border-indigo-300 shadow-sm">
-                          <SelectValue placeholder="Sélectionner un groupe..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            <span className="font-semibold">Sélectionner un groupe...</span>
-                          </SelectItem>
-                          {allGroups.map((group) => (
-                            <SelectItem key={group.id} value={group.id}>
-                              {group.name} ({group.athlete_emails?.length || 0} athlètes)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedGroupId && (
-                        <div className="text-sm text-indigo-700 font-medium mt-2">
-                          ✓ Groupe sélectionné - Affichage des médianes par jour
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             </CardContent>
           </Card>
